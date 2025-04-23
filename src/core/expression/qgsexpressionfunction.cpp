@@ -714,19 +714,21 @@ static QVariant fcnAggregate( const QVariantList &values, const QgsExpressionCon
     QgsExpression subExp( subExpression );
     QgsExpression filterExp( parameters.filter );
 
+    const QSet< QString > filterVars = filterExp.referencedVariables();
+    const QSet< QString > subExpVars = subExp.referencedVariables();
+    QSet<QString> allVars = filterVars + subExpVars;
+
     bool isStatic = true;
-    if ( filterExp.referencedVariables().contains( QStringLiteral( "parent" ) )
-         || filterExp.referencedVariables().contains( QString() )
-         || subExp.referencedVariables().contains( QStringLiteral( "parent" ) )
-         || subExp.referencedVariables().contains( QString() ) )
+    if ( filterVars.contains( QStringLiteral( "parent" ) )
+         || filterVars.contains( QString() )
+         || subExpVars.contains( QStringLiteral( "parent" ) )
+         || subExpVars.contains( QString() ) )
     {
       isStatic = false;
     }
     else
     {
-
-      const QSet<QString> refVars = filterExp.referencedVariables() + subExp.referencedVariables();
-      for ( const QString &varName : refVars )
+      for ( const QString &varName : allVars )
       {
         const QgsExpressionContextScope *scope = context->activeScopeForVariable( varName );
         if ( scope && !scope->isStatic( varName ) )
@@ -752,15 +754,20 @@ static QVariant fcnAggregate( const QVariantList &values, const QgsExpressionCon
 
     if ( !isStatic )
     {
-      cacheKey = QStringLiteral( "aggfcn:%1:%2:%3:%4:%5%6:%7" ).arg( vl->id(), QString::number( static_cast< int >( aggregate ) ), subExpression, parameters.filter,
-                 QString::number( context->feature().id() ), QString::number( qHash( context->feature() ) ), orderBy );
+      bool ok = false;
+      const QString contextHash = context->uniqueHash( ok, allVars );
+      if ( ok )
+      {
+        cacheKey = QStringLiteral( "aggfcn:%1:%2:%3:%4:%5:%6" ).arg( vl->id(), QString::number( static_cast< int >( aggregate ) ), subExpression, parameters.filter,
+                   orderBy, contextHash );
+      }
     }
     else
     {
       cacheKey = QStringLiteral( "aggfcn:%1:%2:%3:%4:%5" ).arg( vl->id(), QString::number( static_cast< int >( aggregate ) ), subExpression, parameters.filter, orderBy );
     }
 
-    if ( context->hasCachedValue( cacheKey ) )
+    if ( !cacheKey.isEmpty() && context->hasCachedValue( cacheKey ) )
     {
       return context->cachedValue( cacheKey );
     }
@@ -771,7 +778,7 @@ static QVariant fcnAggregate( const QVariantList &values, const QgsExpressionCon
     subContext.appendScope( subScope );
     result = vl->aggregate( aggregate, subExpression, parameters, &subContext, &ok, nullptr, context->feedback(), &aggregateError );
 
-    if ( ok )
+    if ( ok && !cacheKey.isEmpty() )
     {
       // important -- we should only store cached values when the expression is successfully calculated. Otherwise subsequent
       // use of the expression context will happily grab the invalid QVariant cached value without realising that there was actually an error
@@ -824,11 +831,11 @@ static QVariant fcnAggregateRelation( const QVariantList &values, const QgsExpre
   ENSURE_NO_EVAL_ERROR
   QString relationId = value.toString();
   // check relation exists
-  QgsRelation relation = QgsProject::instance()->relationManager()->relation( relationId );
+  QgsRelation relation = QgsProject::instance()->relationManager()->relation( relationId ); // skip-keyword-check
   if ( !relation.isValid() || relation.referencedLayer() != vl )
   {
     // check for relations by name
-    QList< QgsRelation > relations = QgsProject::instance()->relationManager()->relationsByName( relationId );
+    QList< QgsRelation > relations = QgsProject::instance()->relationManager()->relationsByName( relationId ); // skip-keyword-check
     if ( relations.isEmpty() || relations.at( 0 ).referencedLayer() != vl )
     {
       parent->setEvalErrorString( QObject::tr( "Cannot find relation with id '%1'" ).arg( relationId ) );
@@ -891,11 +898,11 @@ static QVariant fcnAggregateRelation( const QVariantList &values, const QgsExpre
 
   parameters.filter = relation.getRelatedFeaturesFilter( f );
 
-  QString cacheKey = QStringLiteral( "relagg:%1:%2:%3:%4:%5" ).arg( vl->id(),
-                     QString::number( static_cast< int >( aggregate ) ),
-                     subExpression,
-                     parameters.filter,
-                     orderBy );
+  const QString cacheKey = QStringLiteral( "relagg:%1%:%2:%3:%4:%5:%6" ).arg( relationId, vl->id(),
+                           QString::number( static_cast< int >( aggregate ) ),
+                           subExpression,
+                           parameters.filter,
+                           orderBy );
   if ( context->hasCachedValue( cacheKey ) )
     return context->cachedValue( cacheKey );
 
@@ -1018,8 +1025,13 @@ static QVariant fcnAggregateGeneric( Qgis::Aggregate aggregate, const QVariantLi
   QString cacheKey;
   if ( !isStatic )
   {
-    cacheKey = QStringLiteral( "agg:%1:%2:%3:%4:%5%6:%7" ).arg( vl->id(), QString::number( static_cast< int >( aggregate ) ), subExpression, parameters.filter,
-               QString::number( context->feature().id() ), QString::number( qHash( context->feature() ) ), orderBy );
+    bool ok = false;
+    const QString contextHash = context->uniqueHash( ok, refVars );
+    if ( ok )
+    {
+      cacheKey = QStringLiteral( "agg:%1:%2:%3:%4:%5:%6" ).arg( vl->id(), QString::number( static_cast< int >( aggregate ) ), subExpression, parameters.filter,
+                 orderBy, contextHash );
+    }
   }
   else
   {
@@ -1478,14 +1490,15 @@ static QVariant fcnWordwrap( const QVariantList &values, const QgsExpressionCont
 static QVariant fcnLength( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
   // two variants, one for geometry, one for string
-  if ( values.at( 0 ).userType() == qMetaTypeId< QgsGeometry>() )
-  {
-    //geometry variant
-    QgsGeometry geom = QgsExpressionUtils::getGeometry( values.at( 0 ), parent );
-    if ( geom.type() != Qgis::GeometryType::Line )
-      return QVariant();
 
-    return QVariant( geom.length() );
+  //geometry variant
+  QgsGeometry geom = QgsExpressionUtils::getGeometry( values.at( 0 ), parent, true );
+  if ( !geom.isNull() )
+  {
+    if ( geom.type() == Qgis::GeometryType::Line )
+      return QVariant( geom.length() );
+    else
+      return QVariant();
   }
 
   //otherwise fall back to string variant
@@ -3684,15 +3697,10 @@ static QVariant fcnCollectGeometries( const QVariantList &values, const QgsExpre
   parts.reserve( list.size() );
   for ( const QVariant &value : std::as_const( list ) )
   {
-    if ( value.userType() == qMetaTypeId< QgsGeometry>() )
-    {
-      parts << value.value<QgsGeometry>();
-    }
-    else
-    {
-      parent->setEvalErrorString( QStringLiteral( "Cannot convert to geometry" ) );
+    QgsGeometry part = QgsExpressionUtils::getGeometry( value, parent );
+    if ( part.isNull() )
       return QgsGeometry();
-    }
+    parts << part;
   }
 
   return QgsGeometry::collectGeometry( parts );
@@ -4266,9 +4274,17 @@ static QVariant fcnGeomArea( const QVariantList &, const QgsExpressionContext *c
   QgsDistanceArea *calc = parent->geomCalculator();
   if ( calc )
   {
-    double area = calc->measureArea( f.geometry() );
-    area = calc->convertAreaMeasurement( area, parent->areaUnits() );
-    return QVariant( area );
+    try
+    {
+      double area = calc->measureArea( f.geometry() );
+      area = calc->convertAreaMeasurement( area, parent->areaUnits() );
+      return QVariant( area );
+    }
+    catch ( QgsCsException & )
+    {
+      parent->setEvalErrorString( QObject::tr( "An error occurred while calculating area" ) );
+      return QVariant();
+    }
   }
   else
   {
@@ -4293,9 +4309,17 @@ static QVariant fcnGeomLength( const QVariantList &, const QgsExpressionContext 
   QgsDistanceArea *calc = parent->geomCalculator();
   if ( calc )
   {
-    double len = calc->measureLength( f.geometry() );
-    len = calc->convertLengthMeasurement( len, parent->distanceUnits() );
-    return QVariant( len );
+    try
+    {
+      double len = calc->measureLength( f.geometry() );
+      len = calc->convertLengthMeasurement( len, parent->distanceUnits() );
+      return QVariant( len );
+    }
+    catch ( QgsCsException & )
+    {
+      parent->setEvalErrorString( QObject::tr( "An error occurred while calculating length" ) );
+      return QVariant();
+    }
   }
   else
   {
@@ -4310,9 +4334,17 @@ static QVariant fcnGeomPerimeter( const QVariantList &, const QgsExpressionConte
   QgsDistanceArea *calc = parent->geomCalculator();
   if ( calc )
   {
-    double len = calc->measurePerimeter( f.geometry() );
-    len = calc->convertLengthMeasurement( len, parent->distanceUnits() );
-    return QVariant( len );
+    try
+    {
+      double len = calc->measurePerimeter( f.geometry() );
+      len = calc->convertLengthMeasurement( len, parent->distanceUnits() );
+      return QVariant( len );
+    }
+    catch ( QgsCsException & )
+    {
+      parent->setEvalErrorString( QObject::tr( "An error occurred while calculating perimeter" ) );
+      return QVariant();
+    }
   }
   else
   {
@@ -5653,6 +5685,33 @@ static QVariant fcnLineInterpolatePoint( const QVariantList &values, const QgsEx
   return result;
 }
 
+static QVariant fcnLineInterpolatePointByM( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const QgsGeometry lineGeom = QgsExpressionUtils::getGeometry( values.at( 0 ), parent );
+  const double m = QgsExpressionUtils::getDoubleValue( values.at( 1 ), parent );
+  const bool use3DDistance = values.at( 2 ).toBool();
+
+  double x, y, z, distance;
+
+  const QgsLineString *line = qgsgeometry_cast<const QgsLineString *>( lineGeom.constGet() );
+  if ( !line )
+  {
+    return QVariant();
+  }
+
+  if ( line->lineLocatePointByM( m, x, y, z, distance, use3DDistance ) )
+  {
+    QgsPoint point( x, y );
+    if ( use3DDistance && QgsWkbTypes::hasZ( lineGeom.wkbType() ) )
+    {
+      point.addZValue( z );
+    }
+    return QVariant::fromValue( QgsGeometry( point.clone() ) );
+  }
+
+  return QVariant();
+}
+
 static QVariant fcnLineSubset( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
   QgsGeometry lineGeom = QgsExpressionUtils::getGeometry( values.at( 0 ), parent );
@@ -5730,6 +5789,24 @@ static QVariant fcnLineLocatePoint( const QVariantList &values, const QgsExpress
   double distance = lineGeom.lineLocatePoint( pointGeom );
 
   return distance >= 0 ? distance : QVariant();
+}
+
+static QVariant fcnLineLocateM( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const QgsGeometry lineGeom = QgsExpressionUtils::getGeometry( values.at( 0 ), parent );
+  const double m = QgsExpressionUtils::getDoubleValue( values.at( 1 ), parent );
+  const bool use3DDistance = values.at( 2 ).toBool();
+
+  double x, y, z, distance;
+
+  const QgsLineString *line = qgsgeometry_cast<const QgsLineString *>( lineGeom.constGet() );
+  if ( !line )
+  {
+    return QVariant();
+  }
+
+  const bool found = line->lineLocatePointByM( m, x, y, z, distance, use3DDistance );
+  return found ? distance : QVariant();
 }
 
 static QVariant fcnRound( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
@@ -5819,15 +5896,27 @@ static QVariant fcnFormatDate( const QVariantList &values, const QgsExpressionCo
   return locale.toString( datetime, format );
 }
 
-static QVariant fcnColorGrayscaleAverage( const QVariantList &values, const QgsExpressionContext *, QgsExpression *, const QgsExpressionNodeFunction * )
+static QVariant fcnColorGrayscaleAverage( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
-  QColor color = QgsSymbolLayerUtils::decodeColor( values.at( 0 ).toString() );
-  int avg = ( color.red() + color.green() + color.blue() ) / 3;
-  int alpha = color.alpha();
+  const QVariant variant = values.at( 0 );
+  bool isQColor;
+  QColor color = QgsExpressionUtils::getColorValue( variant, parent, isQColor );
+  if ( !color.isValid() )
+    return QVariant();
 
-  color.setRgb( avg, avg, avg, alpha );
+  const float alpha = color.alphaF(); // NOLINT(bugprone-narrowing-conversions): TODO QGIS 4 remove the nolint instructions, QColor was qreal (double) and is now float
+  if ( color.spec() == QColor::Spec::Cmyk )
+  {
+    const float avg = ( color.cyanF() + color.magentaF() + color.yellowF() ) / 3; // NOLINT(bugprone-narrowing-conversions): TODO QGIS 4 remove the nolint instructions, QColor was qreal (double) and is now float
+    color = QColor::fromCmykF( avg, avg, avg, color.blackF(), alpha );
+  }
+  else
+  {
+    const float avg = ( color.redF() + color.greenF() + color.blueF() ) / 3; // NOLINT(bugprone-narrowing-conversions): TODO QGIS 4 remove the nolint instructions, QColor was qreal (double) and is now float
+    color.setRgbF( avg, avg, avg, alpha );
+  }
 
-  return QgsSymbolLayerUtils::encodeColor( color );
+  return isQColor ? QVariant( color ) : QVariant( QgsSymbolLayerUtils::encodeColor( color ) );
 }
 
 static QVariant fcnColorMixRgb( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
@@ -5854,6 +5943,60 @@ static QVariant fcnColorMixRgb( const QVariantList &values, const QgsExpressionC
   return QgsSymbolLayerUtils::encodeColor( newColor );
 }
 
+static QVariant fcnColorMix( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const QVariant variant1 = values.at( 0 );
+  const QVariant variant2 = values.at( 1 );
+
+  if ( variant1.userType() != variant2.userType() )
+  {
+    parent->setEvalErrorString( QObject::tr( "Both color arguments must have the same type (string or color object)" ) );
+    return QVariant();
+  }
+
+  bool isQColor;
+  const QColor color1 = QgsExpressionUtils::getColorValue( variant1, parent, isQColor );
+  if ( !color1.isValid() )
+    return QVariant();
+
+  const QColor color2 = QgsExpressionUtils::getColorValue( variant2, parent, isQColor );
+  if ( !color2.isValid() )
+    return QVariant();
+
+  if ( ( color1.spec() == QColor::Cmyk ) != ( color2.spec() == QColor::Cmyk ) )
+  {
+    parent->setEvalErrorString( QObject::tr( "Both color arguments must have compatible color type (CMYK or RGB/HSV/HSL)" ) );
+    return QVariant();
+  }
+
+  const float ratio = static_cast<float>( std::clamp( QgsExpressionUtils::getDoubleValue( values.at( 2 ), parent ), 0., 1. ) );
+
+  // TODO QGIS 4 remove the nolint instructions, QColor was qreal (double) and is now float
+  // NOLINTBEGIN(bugprone-narrowing-conversions)
+
+  QColor newColor;
+  const float alpha = color1.alphaF() * ( 1 - ratio ) + color2.alphaF() * ratio;
+  if ( color1.spec() == QColor::Spec::Cmyk )
+  {
+    float cyan = color1.cyanF() * ( 1 - ratio ) + color2.cyanF() * ratio;
+    float magenta = color1.magentaF() * ( 1 - ratio ) + color2.magentaF() * ratio;
+    float yellow = color1.yellowF() * ( 1 - ratio ) + color2.yellowF() * ratio;
+    float black = color1.blackF() * ( 1 - ratio ) + color2.blackF() * ratio;
+    newColor = QColor::fromCmykF( cyan, magenta, yellow, black, alpha );
+  }
+  else
+  {
+    float red = color1.redF() * ( 1 - ratio ) + color2.redF() * ratio;
+    float green = color1.greenF() * ( 1 - ratio ) + color2.greenF() * ratio;
+    float blue = color1.blueF() * ( 1 - ratio ) + color2.blueF() * ratio;
+    newColor = QColor::fromRgbF( red, green, blue, alpha );
+  }
+
+  // NOLINTEND(bugprone-narrowing-conversions)
+
+  return isQColor ? QVariant( newColor ) : QVariant( QgsSymbolLayerUtils::encodeColor( newColor ) );
+}
+
 static QVariant fcnColorRgb( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
   int red = QgsExpressionUtils::getNativeIntValue( values.at( 0 ), parent );
@@ -5867,6 +6010,22 @@ static QVariant fcnColorRgb( const QVariantList &values, const QgsExpressionCont
   }
 
   return QStringLiteral( "%1,%2,%3" ).arg( color.red() ).arg( color.green() ).arg( color.blue() );
+}
+
+static QVariant fcnColorRgbF( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const float red = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 0 ), parent ) ), 0.f, 1.f );
+  const float green = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 1 ), parent ) ), 0.f, 1.f );
+  const float blue = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 2 ), parent ) ), 0.f, 1.f );
+  const float alpha = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 3 ), parent ) ), 0.f, 1.f );
+  QColor color = QColor::fromRgbF( red, green, blue, alpha );
+  if ( ! color.isValid() )
+  {
+    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1:%2:%3:%4' to color" ).arg( red ).arg( green ).arg( blue ).arg( alpha ) );
+    return QVariant();
+  }
+
+  return color;
 }
 
 static QVariant fcnTry( const QVariantList &values, const QgsExpressionContext *context, QgsExpression *parent, const QgsExpressionNodeFunction * )
@@ -5922,7 +6081,7 @@ static QVariant fncColorRgba( const QVariantList &values, const QgsExpressionCon
   return QgsSymbolLayerUtils::encodeColor( color );
 }
 
-QVariant fcnRampColor( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+QVariant fcnRampColorObject( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
   QgsGradientColorRamp expRamp;
   const QgsColorRamp *ramp = nullptr;
@@ -5944,7 +6103,13 @@ QVariant fcnRampColor( const QVariantList &values, const QgsExpressionContext *,
 
   double value = QgsExpressionUtils::getDoubleValue( values.at( 1 ), parent );
   QColor color = ramp->color( value );
-  return QgsSymbolLayerUtils::encodeColor( color );
+  return color;
+}
+
+QVariant fcnRampColor( const QVariantList &values, const QgsExpressionContext *context, QgsExpression *parent, const QgsExpressionNodeFunction *node )
+{
+  QColor color = fcnRampColorObject( values, context, parent, node ).value<QColor>();
+  return color.isValid() ? QgsSymbolLayerUtils::encodeColor( color ) : QVariant();
 }
 
 static QVariant fcnColorHsl( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
@@ -5987,6 +6152,23 @@ static QVariant fncColorHsla( const QVariantList &values, const QgsExpressionCon
   return QgsSymbolLayerUtils::encodeColor( color );
 }
 
+static QVariant fcnColorHslF( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  float hue = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 0 ), parent ) ), 0.f, 1.f );
+  float saturation = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 1 ), parent ) ), 0.f, 1.f );
+  float lightness = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 2 ), parent ) ), 0.f, 1.f );
+  float alpha = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 3 ), parent ) ), 0.f, 1.f );
+
+  QColor color = QColor::fromHslF( hue, saturation, lightness, alpha );
+  if ( ! color.isValid() )
+  {
+    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1:%2:%3:%4' to color" ).arg( hue ).arg( saturation ).arg( lightness ).arg( alpha ) );
+    return QVariant();
+  }
+
+  return color;
+}
+
 static QVariant fcnColorHsv( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
   // Hue ranges from 0 - 360
@@ -6025,6 +6207,41 @@ static QVariant fncColorHsva( const QVariantList &values, const QgsExpressionCon
     color = QColor( 0, 0, 0 );
   }
   return QgsSymbolLayerUtils::encodeColor( color );
+}
+
+static QVariant fcnColorHsvF( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  float hue = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 0 ), parent ) ), 0.f, 1.f );
+  float saturation = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 1 ), parent ) ), 0.f, 1.f );
+  float value = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 2 ), parent ) ), 0.f, 1.f );
+  float alpha = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 3 ), parent ) ), 0.f, 1.f );
+  QColor color = QColor::fromHsvF( hue, saturation, value, alpha );
+
+  if ( ! color.isValid() )
+  {
+    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1:%2:%3:%4' to color" ).arg( hue ).arg( saturation ).arg( value ).arg( alpha ) );
+    return QVariant();
+  }
+
+  return color;
+}
+
+static QVariant fcnColorCmykF( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const float cyan = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 0 ), parent ) ), 0.f, 1.f );
+  const float magenta = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 1 ), parent ) ), 0.f, 1.f );
+  const float yellow = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 2 ), parent ) ), 0.f, 1.f );
+  const float black = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 3 ), parent ) ), 0.f, 1.f );
+  const float alpha = std::clamp( static_cast<float>( QgsExpressionUtils::getDoubleValue( values.at( 4 ), parent ) ), 0.f, 1.f );
+
+  QColor color = QColor::fromCmykF( cyan, magenta, yellow, black, alpha );
+  if ( ! color.isValid() )
+  {
+    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1:%2:%3:%4:%5' to color" ).arg( cyan ).arg( magenta ).arg( yellow ).arg( black ).arg( alpha ) );
+    return QVariant();
+  }
+
+  return color;
 }
 
 static QVariant fcnColorCmyk( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
@@ -6073,12 +6290,11 @@ static QVariant fncColorCmyka( const QVariantList &values, const QgsExpressionCo
 
 static QVariant fncColorPart( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
-  QColor color = QgsSymbolLayerUtils::decodeColor( values.at( 0 ).toString() );
-  if ( ! color.isValid() )
-  {
-    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to color" ).arg( values.at( 0 ).toString() ) );
+  const QVariant variant = values.at( 0 );
+  bool isQColor;
+  const QColor color = QgsExpressionUtils::getColorValue( variant, parent, isQColor );
+  if ( !color.isValid() )
     return QVariant();
-  }
 
   QString part = QgsExpressionUtils::getStringValue( values.at( 1 ), parent );
   if ( part.compare( QLatin1String( "red" ), Qt::CaseInsensitive ) == 0 )
@@ -6160,12 +6376,11 @@ static QVariant fcnCreateRamp( const QVariantList &values, const QgsExpressionCo
 
 static QVariant fncSetColorPart( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
-  QColor color = QgsSymbolLayerUtils::decodeColor( values.at( 0 ).toString() );
-  if ( ! color.isValid() )
-  {
-    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to color" ).arg( values.at( 0 ).toString() ) );
+  const QVariant variant = values.at( 0 );
+  bool isQColor;
+  QColor color = QgsExpressionUtils::getColorValue( variant, parent, isQColor );
+  if ( !color.isValid() )
     return QVariant();
-  }
 
   QString part = QgsExpressionUtils::getStringValue( values.at( 1 ), parent );
   int value = QgsExpressionUtils::getNativeIntValue( values.at( 2 ), parent );
@@ -6202,35 +6417,33 @@ static QVariant fncSetColorPart( const QVariantList &values, const QgsExpression
     parent->setEvalErrorString( QObject::tr( "Unknown color component '%1'" ).arg( part ) );
     return QVariant();
   }
-  return QgsSymbolLayerUtils::encodeColor( color );
+  return isQColor ? QVariant( color ) : QVariant( QgsSymbolLayerUtils::encodeColor( color ) );
 }
 
 static QVariant fncDarker( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
-  QColor color = QgsSymbolLayerUtils::decodeColor( values.at( 0 ).toString() );
-  if ( ! color.isValid() )
-  {
-    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to color" ).arg( values.at( 0 ).toString() ) );
+  const QVariant variant = values.at( 0 );
+  bool isQColor;
+  QColor color = QgsExpressionUtils::getColorValue( variant, parent, isQColor );
+  if ( !color.isValid() )
     return QVariant();
-  }
 
   color = color.darker( QgsExpressionUtils::getNativeIntValue( values.at( 1 ), parent ) );
 
-  return QgsSymbolLayerUtils::encodeColor( color );
+  return isQColor ? QVariant( color ) : QVariant( QgsSymbolLayerUtils::encodeColor( color ) );
 }
 
 static QVariant fncLighter( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
 {
-  QColor color = QgsSymbolLayerUtils::decodeColor( values.at( 0 ).toString() );
-  if ( ! color.isValid() )
-  {
-    parent->setEvalErrorString( QObject::tr( "Cannot convert '%1' to color" ).arg( values.at( 0 ).toString() ) );
+  const QVariant variant = values.at( 0 );
+  bool isQColor;
+  QColor color = QgsExpressionUtils::getColorValue( variant, parent, isQColor );
+  if ( !color.isValid() )
     return QVariant();
-  }
 
   color = color.lighter( QgsExpressionUtils::getNativeIntValue( values.at( 1 ), parent ) );
 
-  return QgsSymbolLayerUtils::encodeColor( color );
+  return isQColor ? QVariant( color ) : QVariant( QgsSymbolLayerUtils::encodeColor( color ) );
 }
 
 static QVariant fcnGetGeometry( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
@@ -8352,10 +8565,19 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "color2" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "ratio" ) ),
                                             fcnColorMixRgb, QStringLiteral( "Color" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "color_mix" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "color1" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "color2" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "ratio" ) ),
+                                            fcnColorMix, QStringLiteral( "Color" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "color_rgb" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "red" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "green" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "blue" ) ),
                                             fcnColorRgb, QStringLiteral( "Color" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "color_rgbf" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "red" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "green" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "blue" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "alpha" ), true, 1. ),
+                                            fcnColorRgbF, QStringLiteral( "Color" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "color_rgba" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "red" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "green" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "blue" ) )
@@ -8364,6 +8586,9 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
         << new QgsStaticExpressionFunction( QStringLiteral( "ramp_color" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "ramp_name" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ),
                                             fcnRampColor, QStringLiteral( "Color" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "ramp_color_object" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "ramp_name" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ),
+                                            fcnRampColorObject, QStringLiteral( "Color" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "create_ramp" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "map" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "discrete" ), true, false ),
                                             fcnCreateRamp, QStringLiteral( "Color" ) )
@@ -8376,6 +8601,11 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "lightness" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "alpha" ) ),
                                             fncColorHsla, QStringLiteral( "Color" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "color_hslf" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "hue" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "saturation" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "lightness" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "alpha" ), true, 1. ),
+                                            fcnColorHslF, QStringLiteral( "Color" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "color_hsv" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "hue" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "saturation" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ),
@@ -8385,6 +8615,11 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "alpha" ) ),
                                             fncColorHsva, QStringLiteral( "Color" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "color_hsvf" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "hue" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "saturation" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "alpha" ), true, 1. ),
+                                            fcnColorHsvF, QStringLiteral( "Color" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "color_cmyk" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "cyan" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "magenta" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "yellow" ) )
@@ -8396,6 +8631,12 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "black" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "alpha" ) ),
                                             fncColorCmyka, QStringLiteral( "Color" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "color_cmykf" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "cyan" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "magenta" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "yellow" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "black" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "alpha" ), true, 1. ),
+                                            fcnColorCmykF, QStringLiteral( "Color" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "color_part" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "color" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "component" ) ),
                                             fncColorPart, QStringLiteral( "Color" ) )
@@ -8928,10 +9169,16 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
                                             fcnShortestLine, QStringLiteral( "GeometryGroup" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "line_interpolate_point" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "geometry" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "distance" ) ), fcnLineInterpolatePoint, QStringLiteral( "GeometryGroup" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "line_interpolate_point_by_m" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "geometry" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "m" ) ) << QgsExpressionFunction::Parameter( QStringLiteral( "use_3d_distance" ), true, false ),
+                                            fcnLineInterpolatePointByM, QStringLiteral( "GeometryGroup" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "line_interpolate_angle" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "geometry" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "distance" ) ), fcnLineInterpolateAngle, QStringLiteral( "GeometryGroup" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "line_locate_point" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "geometry" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "point" ) ), fcnLineLocatePoint, QStringLiteral( "GeometryGroup" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "line_locate_m" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "geometry" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "m" ) )  << QgsExpressionFunction::Parameter( QStringLiteral( "use_3d_distance" ), true, false ),
+                                            fcnLineLocateM, QStringLiteral( "GeometryGroup" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "angle_at_vertex" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "geometry" ) )
                                             << QgsExpressionFunction::Parameter( QStringLiteral( "vertex" ) ), fcnAngleAtVertex, QStringLiteral( "GeometryGroup" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "distance_to_vertex" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "geometry" ) )
@@ -9345,7 +9592,6 @@ const QStringList &QgsExpression::BuiltinFunctions()
   }
   return *sBuiltinFunctions();
 }
-
 
 QgsArrayForeachExpressionFunction::QgsArrayForeachExpressionFunction()
   : QgsExpressionFunction( QStringLiteral( "array_foreach" ), QgsExpressionFunction::ParameterList()  // skip-keyword-check

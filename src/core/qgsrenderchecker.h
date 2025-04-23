@@ -199,6 +199,7 @@ class CORE_EXPORT QgsRenderChecker
     enum class Flag : int SIP_ENUM_BASETYPE( IntFlag )
     {
       AvoidExportingRenderedImage = 1 << 0, //!< Avoids exporting rendered images to reports
+      Silent = 1 << 1, //!< Don't output non-critical messages to console \since QGIS 3.40
     };
     Q_ENUM( Flag )
 
@@ -254,7 +255,7 @@ class CORE_EXPORT QgsRenderChecker
      * acceptable.
      * \returns a bool indicating if the diff matched one of the anomaly files
      *
-     * \deprecated Use the test mask system instead.
+     * \deprecated QGIS 3.40. Use the test mask system instead.
      */
     Q_DECL_DEPRECATED bool isKnownAnomaly( const QString &diffImageFile ) SIP_DEPRECATED;
 

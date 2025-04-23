@@ -54,7 +54,7 @@
 #include <getopt.h>
 #endif
 
-#ifdef Q_OS_MACX
+#ifdef Q_OS_MACOS
 #include <ApplicationServices/ApplicationServices.h>
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
 typedef SInt32 SRefCon;
@@ -177,10 +177,10 @@ void usage( const QString &appName )
       << QStringLiteral( "        the PostGIS extension\n" )  ; // OK
 
 #ifdef Q_OS_WIN
-  MessageBox( nullptr,
-              msg.join( QString() ).toLocal8Bit().constData(),
-              "QGIS command line options",
-              MB_OK );
+  MessageBoxA( nullptr,
+               msg.join( QString() ).toLocal8Bit().constData(),
+               "QGIS command line options",
+               MB_OK );
 #else
   std::cout << msg.join( QString() ).toLocal8Bit().constData();
 #endif
@@ -219,7 +219,7 @@ void myPrint( const char *fmt, ... )
 #if defined(Q_OS_WIN)
   char buffer[1024];
   vsnprintf( buffer, sizeof buffer, fmt, ap );
-  OutputDebugString( buffer );
+  OutputDebugStringA( buffer );
 #else
   vfprintf( stderr, fmt, ap );
 #endif
@@ -1358,7 +1358,7 @@ int main( int argc, char *argv[] )
   QgsCustomization::instance()->setSettings( customizationsettings );
   QgsCustomization::instance()->loadDefault();
 
-#ifdef Q_OS_MACX
+#ifdef Q_OS_MACOS
   if ( !getenv( "GDAL_DRIVER_PATH" ) )
   {
     // If the GDAL plugins are bundled with the application and GDAL_DRIVER_PATH

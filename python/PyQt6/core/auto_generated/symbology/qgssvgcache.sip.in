@@ -22,11 +22,11 @@ This class supports parameter replacement in SVG files according to the SVG para
 
 Supported parameters are:
 
-- ``param``(fill): fill color (with no opacity value)
-- ``param``(fill-opacity): fill color opacity
-- ``param``(outline): outline color (with no opacity value)
-- ``param``(outline-opacity): outline color opacity
-- ``param``(outline-width): width of outline strokes
+- ``param(fill)``: fill color (with no opacity value)
+- ``param(fill-opacity)``: fill color opacity
+- ``param(outline)``: outline color (with no opacity value)
+- ``param(outline-opacity)``: outline color opacity
+- ``param(outline-width)``: width of outline strokes
 
 E.g:
 
@@ -216,8 +216,9 @@ in the same thread to ensure provided the image.
 %Docstring
 Emit a signal to be caught by qgisapp and display a msg on status bar.
 
-.. deprecated::
-   Deprecated since QGIS 3.6 -- no longer emitted.
+.. deprecated:: 3.6
+
+   No longer emitted.
 %End
 
     void remoteSvgFetched( const QString &url );

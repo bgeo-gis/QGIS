@@ -35,8 +35,9 @@ Returns a user-friendly translated string representing a QVariant ``type``.
 
 The optional ``subType`` can be used to specify the type of variant list or map values.
 
-.. deprecated:: QGIS 3.38
-  use the method with a QMetaType.Type argument instead
+.. deprecated:: 3.38
+
+   Use the method with a QMetaType.Type argument instead.
 %End
 
     static bool isNull( const QVariant &variant );
@@ -47,6 +48,13 @@ This method is more rigorous vs QVariant.isNull(), which will return
 ``False`` on newer Qt versions for tests like `QVariant( QDateTime() ).isNull()`.
 
 .. versionadded:: 3.28
+%End
+
+    static bool isNumericType( QMetaType::Type metaType );
+%Docstring
+Returns ``True`` if the specified ``metaType`` is a numeric type.
+
+.. versionadded:: 3.40
 %End
 
 

@@ -222,13 +222,14 @@ QgsRasterLayerRenderer::QgsRasterLayerRenderer( QgsRasterLayer *layer, QgsRender
   mRasterViewPort->mWidth = static_cast<qgssize>( std::abs( mRasterViewPort->mBottomRightPoint.x() - mRasterViewPort->mTopLeftPoint.x() ) );
   mRasterViewPort->mHeight = static_cast<qgssize>( std::abs( mRasterViewPort->mBottomRightPoint.y() - mRasterViewPort->mTopLeftPoint.y() ) );
 
-  const double dpi = 25.4 * rendererContext.scaleFactor();
+  double dpi = 25.4 * rendererContext.scaleFactor();
   if ( mProviderCapabilities & Qgis::RasterProviderCapability::DpiDependentData
        && rendererContext.dpiTarget() >= 0.0 )
   {
     const double dpiScaleFactor = rendererContext.dpiTarget() / dpi;
     mRasterViewPort->mWidth *= dpiScaleFactor;
     mRasterViewPort->mHeight *= dpiScaleFactor;
+    dpi = rendererContext.dpiTarget();
   }
   else
   {
@@ -513,6 +514,15 @@ bool QgsRasterLayerRenderer::render()
 
   // Drawer to pipe?
   QgsRasterIterator iterator( mPipe->last() );
+
+  // Get the maximum tile size from the provider and set it as the maximum tile size for the iterator
+  if ( QgsRasterDataProvider *provider = mPipe->provider() )
+  {
+    const QSize maxTileSize {provider->maximumTileSize()};
+    iterator.setMaximumTileWidth( maxTileSize.width() );
+    iterator.setMaximumTileHeight( maxTileSize.height() );
+  }
+
   QgsRasterDrawer drawer( &iterator );
   drawer.draw( *( renderContext() ), mRasterViewPort, mFeedback );
 

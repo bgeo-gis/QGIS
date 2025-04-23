@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 ###########################################################################
-#    doxygen_space.pl
+#    doxygen_space.py
 #    ---------------------
 #    begin                : October 2016
 #    copyright            : (C) 2016 by Nyall Dawson
@@ -17,6 +17,11 @@
 ###########################################################################
 import sys
 import re
+
+
+def exit_with_error(message):
+    sys.exit(
+        f"! Doxygen formatting error: {message}")
 
 
 def process_file(file_path):
@@ -63,6 +68,44 @@ def process_file(file_path):
             # Uppercase initial character in //!< comment
             prefix, first, remaining = match.groups()
             line = f'{prefix}//!< {first.upper()}{remaining}'
+
+        if match := re.match(r'^(.*)\\param ([\w_]+)\s+[:,.-]\s*(.*?)$', line):
+            # Standardize \param
+            prefix, param, suffix = match.groups()
+            line = f'{prefix}\\param {param} {suffix}'
+
+        if '//!<' in line and (match := re.match(r'^(.*)\.\s*[Ss]ince (?:QGIS )?(\d+\.\d+(?:\.\d+)?)[.]?$', line)):
+            # Use \since annotation
+            prefix, version = match.groups()
+            line = f'{prefix} \\since QGIS {version}'
+
+        if '//!<' in line and (match := re.match(r'^(.*?)\s*\([Ss]ince (?:QGIS )?(\d+\.\d+(?:\.\d+)?)[.)]+$', line)):
+            # Use \since annotation
+            prefix, version = match.groups()
+            line = f'{prefix} \\since QGIS {version}'
+
+        if match := re.match(r'^(.*)\\since (?:QGIS )?(\d+\.\d+(?:\.\d+)?)[.]?$', line):
+            # Standard since annotation
+            prefix, version = match.groups()
+            line = f'{prefix}\\since QGIS {version}'
+
+        if match := re.match(r'^(.*)\\deprecated[,.:]? (?:[dD]eprecated )?(?:[sS]ince )?(?:QGIS )?(\d+\.\d+(?:\.\d+)?)[,\s.\-]*(.*?)$', line):
+            # Standardize deprecated annotation
+            prefix, version, suffix = match.groups()
+            if suffix:
+                if suffix.startswith('('):
+                    if suffix.endswith(')'):
+                        suffix = suffix[1:-1]
+                    elif suffix.endswith(').'):
+                        suffix = suffix[1:-2]
+                suffix = suffix[0].upper() + suffix[1:]
+                if not suffix.endswith('.'):
+                    suffix += "."
+                line = f'{prefix}\\deprecated QGIS {version}. {suffix}'
+            else:
+                line = f'{prefix}\\deprecated QGIS {version}'
+        elif re.match(r'^(.*)\\deprecated', line):
+            exit_with_error("\\deprecated MUST be followed by the correct version number, eg 'QGIS 3.40'")
 
         if match := re.match(r'^(\s*)//!\s*(.*?)$', line):
             indentation, comment = match.groups()

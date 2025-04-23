@@ -432,7 +432,7 @@ Sets the item's parent ``group``.
 
     virtual ExportLayerBehavior exportLayerBehavior() const;
 %Docstring
-Returns the behavior of this item during exporting to layered exports (e.g. SVG or GeoPDF).
+Returns the behavior of this item during exporting to layered exports (e.g. SVG or geospatial PDF).
 
 .. seealso:: :py:func:`numberExportLayers`
 
@@ -454,7 +454,8 @@ their rendering to determine which layer should be drawn.
 
 .. seealso:: :py:func:`exportLayerDetails`
 
-.. deprecated::
+.. deprecated:: 3.40
+
    Use :py:func:`~QgsLayoutItem.nextExportPart` and :py:func:`~QgsLayoutItem.exportLayerBehavior` instead.
 %End
 

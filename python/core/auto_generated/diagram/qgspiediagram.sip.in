@@ -8,7 +8,6 @@
 
 
 
-
 class QgsPieDiagram: QgsDiagram /NoDefaultCtors/
 {
 %Docstring(signature="appended")
@@ -19,6 +18,7 @@ A pie chart diagram.
 #include "qgspiediagram.h"
 %End
   public:
+
     QgsPieDiagram();
 
     virtual QgsPieDiagram *clone() const /Factory/;
@@ -29,9 +29,9 @@ A pie chart diagram.
 
     virtual QSizeF diagramSize( const QgsAttributes &attributes, const QgsRenderContext &c, const QgsDiagramSettings &s );
 
-    virtual QSizeF diagramSize( const QgsFeature &feature, const QgsRenderContext &c, const QgsDiagramSettings &s, const QgsDiagramInterpolationSettings &is );
+    virtual QSizeF diagramSize( const QgsFeature &feature, const QgsRenderContext &c, const QgsDiagramSettings &s, const QgsDiagramInterpolationSettings &interpolationSettings );
 
-    virtual double legendSize( double value, const QgsDiagramSettings &s, const QgsDiagramInterpolationSettings &is ) const;
+    virtual double legendSize( double value, const QgsDiagramSettings &s, const QgsDiagramInterpolationSettings &interpolationSettings ) const;
 
     virtual QString diagramName() const;
 

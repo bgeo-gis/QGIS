@@ -178,8 +178,6 @@ Creates a DOM element representing the range in SLD format.
 %End
 
   protected:
-
-    void swap( QgsRendererRange &other );
 };
 
 typedef QList<QgsRendererRange> QgsRangeList;
@@ -189,8 +187,9 @@ class QgsRendererRangeLabelFormat /Deprecated/
 {
 %Docstring(signature="appended")
 
-.. deprecated:: QGIS 3.10
-  use :py:class:`QgsClassificationMethod` instead
+.. deprecated:: 3.10
+
+   Use :py:class:`QgsClassificationMethod` instead.
 %End
 
 %TypeHeaderCode

@@ -105,6 +105,7 @@
 #include "qgsprocessingalignrasterlayerswidgetwrapper.h"
 #include "qgsprocessingrasteroptionswidgetwrapper.h"
 #include "qgsrasterformatsaveoptionswidget.h"
+#include "qgsgeometrywidget.h"
 
 
 class TestParamType : public QgsProcessingParameterDefinition
@@ -354,7 +355,9 @@ void TestProcessingGui::initTestCase()
             "Authentication system is DISABLED" );
 
   // verify QGIS_AUTH_DB_DIR_PATH (temp auth db path) worked
+  Q_NOWARN_DEPRECATED_PUSH
   QString db1( QFileInfo( QgsApplication::authManager()->authenticationDatabasePath() ).canonicalFilePath() );
+  Q_NOWARN_DEPRECATED_POP
   QString db2( QFileInfo( mTempDir + "/qgis-auth.db" ).canonicalFilePath() );
   QVERIFY2( db1 == db2, "Auth db temp path does not match db path of manager" );
 
@@ -6067,15 +6070,15 @@ void TestProcessingGui::testGeometryWrapper()
     QgsProcessingContext context;
     QWidget *w = wrapper.createWrappedWidget( context );
 
-    QSignalSpy spy( &wrapper, &QgsProcessingLayoutItemWidgetWrapper::widgetValueHasChanged );
+    QSignalSpy spy( &wrapper, &QgsProcessingGeometryWidgetWrapper::widgetValueHasChanged );
     wrapper.setWidgetValue( QStringLiteral( "POINT (1 2)" ), context );
     QCOMPARE( spy.count(), 1 );
     QCOMPARE( wrapper.widgetValue().toString().toLower(), QStringLiteral( "point (1 2)" ) );
-    QCOMPARE( static_cast< QLineEdit * >( wrapper.wrappedWidget() )->text().toLower(), QStringLiteral( "point (1 2)" ).toLower() );
+    QCOMPARE( static_cast< QgsGeometryWidget * >( wrapper.wrappedWidget() )->geometryValue().asWkt().toLower(), QStringLiteral( "point (1 2)" ).toLower() );
     wrapper.setWidgetValue( QString(), context );
     QCOMPARE( spy.count(), 2 );
     QVERIFY( wrapper.widgetValue().toString().isEmpty() );
-    QVERIFY( static_cast< QLineEdit * >( wrapper.wrappedWidget() )->text().isEmpty() );
+    QVERIFY( static_cast< QgsGeometryWidget * >( wrapper.wrappedWidget() )->geometryValue().asWkt().isEmpty() );
 
     QLabel *l = wrapper.createWrappedLabel();
     if ( wrapper.type() != QgsProcessingGui::Batch )
@@ -6091,9 +6094,9 @@ void TestProcessingGui::testGeometryWrapper()
     }
 
     // check signal
-    static_cast< QLineEdit * >( wrapper.wrappedWidget() )->setText( QStringLiteral( "b" ) );
+    static_cast< QgsGeometryWidget * >( wrapper.wrappedWidget() )->setGeometryValue( QgsReferencedGeometry( QgsGeometry::fromWkt( "point(0 0)" ), QgsCoordinateReferenceSystem() ) );
     QCOMPARE( spy.count(), 3 );
-    static_cast< QLineEdit * >( wrapper.wrappedWidget() )->clear();
+    static_cast< QgsGeometryWidget * >( wrapper.wrappedWidget() )->clearGeometry();
     QCOMPARE( spy.count(), 4 );
 
     delete w;
@@ -6110,19 +6113,19 @@ void TestProcessingGui::testGeometryWrapper()
     wrapper2.setWidgetValue( "POINT (1 2)", context );
     QCOMPARE( spy2.count(), 1 );
     QCOMPARE( wrapper2.widgetValue().toString().toLower(), QStringLiteral( "point (1 2)" ) );
-    QCOMPARE( static_cast< QLineEdit * >( wrapper2.wrappedWidget() )->text().toLower(), QStringLiteral( "point (1 2)" ) );
+    QCOMPARE( static_cast< QgsGeometryWidget * >( wrapper2.wrappedWidget() )->geometryValue().asWkt().toLower(), QStringLiteral( "point (1 2)" ) );
 
     wrapper2.setWidgetValue( QVariant(), context );
     QCOMPARE( spy2.count(), 2 );
     QVERIFY( !wrapper2.widgetValue().isValid() );
-    QVERIFY( static_cast< QLineEdit * >( wrapper2.wrappedWidget() )->text().isEmpty() );
+    QVERIFY( static_cast< QgsGeometryWidget * >( wrapper2.wrappedWidget() )->geometryValue().asWkt().isEmpty() );
 
     wrapper2.setWidgetValue( "POINT (1 3)", context );
     QCOMPARE( spy2.count(), 3 );
     wrapper2.setWidgetValue( "", context );
     QCOMPARE( spy2.count(), 4 );
     QVERIFY( !wrapper2.widgetValue().isValid() );
-    QVERIFY( static_cast< QLineEdit * >( wrapper2.wrappedWidget() )->text().isEmpty() );
+    QVERIFY( static_cast< QgsGeometryWidget * >( wrapper2.wrappedWidget() )->geometryValue().asWkt().isEmpty() );
 
     delete w;
   };

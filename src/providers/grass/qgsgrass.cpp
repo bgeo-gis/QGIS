@@ -270,8 +270,8 @@ QString QgsGrass::pathSeparator()
 #include <windows.h>
 QString QgsGrass::shortPath( const QString &path )
 {
-  TCHAR buf[MAX_PATH];
-  int len = GetShortPathName( path.toUtf8().constData(), buf, MAX_PATH );
+  char buf[MAX_PATH];
+  int len = GetShortPathNameA( path.toUtf8().constData(), buf, MAX_PATH );
 
   if ( len == 0 || len > MAX_PATH )
   {
@@ -423,7 +423,7 @@ bool QgsGrass::init( void )
     {
 #ifdef Q_OS_WIN
       // avoid finding pager in current directory
-      bool skipCurrentDirectory = getenv( "NoDefaultCurrentDirectoryInExePath" ) != nullptr;
+      bool skipCurrentDirectory = getenv( "NoDefaultCurrentDirectoryInExePath" );
       if ( !skipCurrentDirectory )
         putEnv( QStringLiteral( "NoDefaultCurrentDirectoryInExePath" ), "1" );
 #endif
@@ -2691,7 +2691,7 @@ QString QgsGrass::defaultGisbase()
   gisbase = shortPath( QCoreApplication::applicationDirPath() + ( QgsApplication::isRunningFromBuildDir() ?  + "/.." : "" ) + "/grass" );
 #endif
   // Use the location specified by WITH_GRASS during configure
-#elif defined(Q_OS_MACX)
+#elif defined(Q_OS_MACOS)
   // check for bundled GRASS, fall back to configured path
   gisbase = QCoreApplication::applicationDirPath().append( "/grass" );
   if ( !isValidGrassBaseDir( gisbase ) )

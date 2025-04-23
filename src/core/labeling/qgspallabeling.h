@@ -211,11 +211,11 @@ class CORE_EXPORT QgsPalLayerSettings
       LinePlacementOptions = 99, //!< Line placement flags
       OverrunDistance = 102, //!< Distance which labels can extend past either end of linear features
       LabelAllParts = 103, //!< Whether all parts of multi-part features should be labeled
-      PolygonLabelOutside = 109, //!< Whether labels outside a polygon feature are permitted, or should be forced (since QGIS 3.14)
-      LineAnchorPercent = 111, //!< Portion along line at which labels should be anchored (since QGIS 3.16)
-      LineAnchorClipping = 112, //!< Clipping mode for line anchor calculation (since QGIS 3.20)
-      LineAnchorType = 115, //!< Line anchor type (since QGIS 3.26)
-      LineAnchorTextPoint = 116, //!< Line anchor text point (since QGIS 3.26)
+      PolygonLabelOutside = 109, //!< Whether labels outside a polygon feature are permitted, or should be forced \since QGIS 3.14
+      LineAnchorPercent = 111, //!< Portion along line at which labels should be anchored \since QGIS 3.16
+      LineAnchorClipping = 112, //!< Clipping mode for line anchor calculation \since QGIS 3.20
+      LineAnchorType = 115, //!< Line anchor type \since QGIS 3.26
+      LineAnchorTextPoint = 116, //!< Line anchor text point \since QGIS 3.26
 
       // rendering
       ScaleVisibility = 23,
@@ -231,8 +231,8 @@ class CORE_EXPORT QgsPalLayerSettings
       ZIndex = 90,
       CalloutDraw = 100, //!< Show callout
 
-      AllowDegradedPlacement = 117, //!< Allow degraded label placements (since QGIS 3.26)
-      OverlapHandling = 118, //!< Overlap handling technique (since QGIS 3.26)
+      AllowDegradedPlacement = 117, //!< Allow degraded label placements \since QGIS 3.26
+      OverlapHandling = 118, //!< Overlap handling technique \since QGIS 3.26
 
       // (data defined only)
       Show = 15,
@@ -320,7 +320,7 @@ class CORE_EXPORT QgsPalLayerSettings
     QgsExpression *getLabelExpression();
 
     /**
-     * \deprecated since QGIS 3.10. Use QgsTextFormat::previewBackgroundColor() instead.
+     * \deprecated QGIS 3.10. Use QgsTextFormat::previewBackgroundColor() instead.
      */
     Q_DECL_DEPRECATED QColor previewBkgrdColor = Qt::white;
 
@@ -633,15 +633,16 @@ class CORE_EXPORT QgsPalLayerSettings
     /**
      * Calculates the space required to render the provided \a text in map units.
      * Results will be written to \a labelX and \a labelY.
+     *
      * If the text orientation is set to rotation-based, the spaced taken to render
-     * vertically oriented text will be written to \a rotatedLabelX and \a rotatedLabelY .
+     * vertically oriented text will be written to \a rotatedLabelX and \a rotatedLabelY.
+     *
+     * \warning This method only returns an approximate label size, and eg will not consider
+     * HTML formatted text correctly.
+     *
+     * \deprecated QGIS 3.40. Will be removed from public API in QGIS 4.0.
      */
-#ifndef SIP_RUN
-    void calculateLabelSize( const QFontMetricsF *fm, const QString &text, double &labelX, double &labelY, const QgsFeature *f = nullptr, QgsRenderContext *context = nullptr, double *rotatedLabelX SIP_OUT = nullptr, double *rotatedLabelY SIP_OUT = nullptr,
-                             QgsTextFormat *format = nullptr, QgsTextDocument *document = nullptr, QgsTextDocumentMetrics *documentMetrics = nullptr, QRectF *outerBounds = nullptr );
-#else
-    void calculateLabelSize( const QFontMetricsF *fm, const QString &text, double &labelX, double &labelY, const QgsFeature *f = nullptr, QgsRenderContext *context = nullptr, double *rotatedLabelX SIP_OUT = nullptr, double *rotatedLabelY SIP_OUT = nullptr );
-#endif
+    Q_DECL_DEPRECATED void calculateLabelSize( const QFontMetricsF *fm, const QString &text, double &labelX, double &labelY, const QgsFeature *f = nullptr, QgsRenderContext *context = nullptr, double *rotatedLabelX SIP_OUT = nullptr, double *rotatedLabelY SIP_OUT = nullptr ) SIP_DEPRECATED;
 
     /**
      * Registers a feature for labeling.
@@ -674,6 +675,7 @@ class CORE_EXPORT QgsPalLayerSettings
      */
     std::unique_ptr< QgsLabelFeature > registerFeatureWithDetails( const QgsFeature &feature, QgsRenderContext &context,
         QgsGeometry obstacleGeometry = QgsGeometry(), const QgsSymbol *symbol = nullptr );
+
 #endif
 
     /**
@@ -925,6 +927,21 @@ class CORE_EXPORT QgsPalLayerSettings
      * Reads a data defined property from a QGIS 2.x project.
      */
     void readOldDataDefinedProperty( QgsVectorLayer *layer, QgsPalLayerSettings::Property p );
+
+    /**
+     * Calculates the space required to render the provided \a text in map units.
+     * Results will be written to \a size.
+     *
+     * If the text orientation is set to rotation-based, the space taken to render
+     * vertically oriented text will be written to \a rotatedSize.
+     */
+    void calculateLabelSize( const QFontMetricsF &fm, const QString &text, QgsRenderContext &context,
+                             const QgsTextFormat &format,
+                             QgsTextDocument *document,
+                             QgsTextDocumentMetrics *documentMetrics,
+                             QSizeF &size, QSizeF &rotatedSize,
+                             QRectF &outerBounds );
+
 
     enum DataDefinedValueType
     {

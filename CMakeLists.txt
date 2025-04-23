@@ -19,13 +19,43 @@ endif()
 # don't relink it only the shared object changes
 set(CMAKE_LINK_DEPENDS_NO_SHARED ON)
 
+set (WITH_BINDINGS TRUE CACHE BOOL "Determines whether Python bindings should be built")
+set (WITH_3D TRUE CACHE BOOL "Determines whether QGIS 3D library should be built")
+set (WITH_QGIS_PROCESS TRUE CACHE BOOL "Determines whether the standalone \"qgis_process\" tool should be built")
+set (WITH_DESKTOP TRUE CACHE BOOL "Determines whether QGIS desktop should be built")
+set (WITH_GUI TRUE CACHE BOOL "Determines whether QGIS GUI library should be built")
+set(WITH_VCPKG FALSE CACHE BOOL "Use the vcpkg submodule for dependency management.")
+
+set(SDK_PATH "" CACHE STRING "Build with VCPKG SDK")
+
+if(NOT SDK_PATH STREQUAL "")
+  message(STATUS "Building with SDK -- ${SDK_PATH}")
+  set(CMAKE_TOOLCHAIN_FILE "${SDK_PATH}/scripts/buildsystems/vcpkg.cmake")
+  if(APPLE AND NOT VCPKG_TARGET_TRIPLET)
+    set(VCPKG_TARGET_TRIPLET "x64-osx-dynamic")
+  endif()
+  set(WITH_VCPKG ON)
+elseif(WITH_VCPKG)
+  message(STATUS "Building local dependencies with VCPKG --")
+  include(VcpkgToolchain)
+else()
+  message(STATUS "Building with system libraries --")
+endif()
+
+if(WITH_VCPKG)
+  list(APPEND CMAKE_PROGRAM_PATH "${VCPKG_INSTALL_PREFIX}/${VCPKG_TARGET_TRIPLET}/")
+  set(PREFER_INTERNAL_LIBS FALSE)
+else()
+  set(PREFER_INTERNAL_LIBS TRUE)
+endif()
+
 #############################################################
 # Project and version
 set(CPACK_PACKAGE_VERSION_MAJOR "3")
-set(CPACK_PACKAGE_VERSION_MINOR "39")
+set(CPACK_PACKAGE_VERSION_MINOR "40")
 set(CPACK_PACKAGE_VERSION_PATCH "0")
 set(COMPLETE_VERSION ${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
-set(RELEASE_NAME "Master")
+set(RELEASE_NAME "Bratislava")
 project(qgis VERSION ${COMPLETE_VERSION})
 
 if (APPLE)
@@ -85,17 +115,15 @@ if (USE_OPENCL)
 endif()
 
 # Configure CCache if available
-if(NOT MSVC)
-  option(USE_CCACHE "Use ccache" ON)
-  if (USE_CCACHE)
-    find_program(CCACHE_FOUND ccache)
-    if(CCACHE_FOUND)
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
-        message(STATUS "ccache found")
-    endif(CCACHE_FOUND)
-  endif(USE_CCACHE)
-endif(NOT MSVC)
+option(USE_CCACHE "Use ccache" ON)
+if (USE_CCACHE)
+  find_program(CCACHE_FOUND ccache)
+  if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
+    message(STATUS "ccache found")
+  endif(CCACHE_FOUND)
+endif(USE_CCACHE)
 
 if (IOS)
     set (DEFAULT_FORCE_STATIC_LIBS TRUE)
@@ -140,7 +168,6 @@ if(WITH_CORE)
     endif()
   endforeach (GRASS_SEARCH_VERSION)
 
-  set (WITH_GUI TRUE CACHE BOOL "Determines whether QGIS GUI library (and everything built on top of it) should be built")
 
   set (WITH_OAUTH2_PLUGIN TRUE CACHE BOOL "Determines whether OAuth2 authentication method plugin should be built")
   if(WITH_OAUTH2_PLUGIN)
@@ -150,8 +177,6 @@ if(WITH_CORE)
   set (WITH_AUTH TRUE CACHE BOOL "Determines whether QGIS authentication methods should be built")
 
   set (WITH_ANALYSIS TRUE CACHE BOOL "Determines whether QGIS analysis library should be built")
-
-  set (WITH_DESKTOP TRUE CACHE BOOL "Determines whether QGIS desktop should be built")
 
   if(WITH_DESKTOP)
       if((WIN32 AND NOT MINGW) OR (UNIX AND NOT APPLE AND NOT ANDROID AND NOT IOS))
@@ -171,17 +196,12 @@ if(WITH_CORE)
       endif()
   endif()
 
-  set (WITH_3D TRUE CACHE BOOL "Determines whether QGIS 3D library should be built")
-
   set (WITH_QUICK FALSE CACHE BOOL "Determines whether QGIS Quick library should be built")
-
-  set (WITH_QGIS_PROCESS TRUE CACHE BOOL "Determines whether the standalone \"qgis_process\" tool should be built")
 
   set (NATIVE_CRSSYNC_BIN "" CACHE PATH "Path to a natively compiled synccrsdb binary. If set, crssync will not build but use provided bin instead.")
   mark_as_advanced (NATIVE_CRSSYNC_BIN)
 
   # try to configure and build python bindings by default
-  set (WITH_BINDINGS TRUE CACHE BOOL "Determines whether Python bindings should be built")
   if (WITH_BINDINGS)
     # By default bindings will be installed only to QGIS directory
     # Someone might want to install it to python site-packages directory
@@ -254,7 +274,8 @@ if(WITH_CORE)
   endif()
 
   # try to configure and build POLY2TRI support
-  set (WITH_INTERNAL_POLY2TRI TRUE CACHE BOOL "Determines whether POLY2TRI should be built from internal copy")
+  set (WITH_INTERNAL_POLY2TRI PREFER_INTERNAL_LIBS CACHE BOOL "Determines whether POLY2TRI should be built from internal copy")
+  set (WITH_INTERNAL_MESHOPTIMIZER PREFER_INTERNAL_LIBS CACHE BOOL "Determines whether MESHOPTIMIZER should be built from internal copy")
 
   # try to configure and build POSTGRESQL support
   set (WITH_POSTGRESQL TRUE CACHE BOOL "Determines whether POSTGRESQL support should be built")
@@ -367,13 +388,14 @@ if(WITH_CORE)
   find_package(EXPAT REQUIRED)
   find_package(Spatialindex REQUIRED)
   find_package(LibZip REQUIRED)
-  set (WITH_INTERNAL_NLOHMANN_JSON ON CACHE BOOL "Determines whether the vendored copy of nlohmann-json should be used")
+  set (WITH_INTERNAL_NLOHMANN_JSON PREFER_INTERNAL_LIBS CACHE BOOL "Determines whether the vendored copy of nlohmann-json should be used")
   find_package(nlohmann_json REQUIRED)
 
-  find_package(Sqlite3)
-  if (NOT SQLITE3_FOUND)
-    message (SEND_ERROR "sqlite3 dependency was not found!")
-  endif()
+  # The following bypasses the FindSQLite3 module introduced in CMake 3.14
+  # On case insensitive platforms (e.g. Windows) this is because
+  # ./cmake/FindSqlite3.cmake comes first on the CMAKE_MODULE_PATH
+  # (otherwise it is because of the case: *Sqlite3* vs. *SQLite3*)
+  find_package(Sqlite3 REQUIRED)
 
   find_package(Protobuf CONFIG)
   find_package(Protobuf REQUIRED)
@@ -640,8 +662,8 @@ if (ENABLE_TESTS)
   add_custom_target(check COMMAND xvfb-run --server-args=-screen\ 0\ 1024x768x24 ctest --output-on-failure)
 
   # Define SOURCETREE fixture
-  add_test(NAME   logGitStatus COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/chkgitstatus.sh log)
-  add_test(NAME checkGitStatus COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/chkgitstatus.sh check)
+  add_test(NAME   logGitStatus COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/scripts/chkgitstatus.sh log)
+  add_test(NAME checkGitStatus COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/scripts/chkgitstatus.sh check)
   set_tests_properties(logGitStatus   PROPERTIES FIXTURES_SETUP   SOURCETREE)
   set_property(TEST logGitStatus PROPERTY SKIP_RETURN_CODE 2)
   set_tests_properties(checkGitStatus PROPERTIES FIXTURES_CLEANUP SOURCETREE)
@@ -1051,7 +1073,7 @@ set(QGIS_INSTALL_SYS_LIBS TRUE CACHE BOOL "If set to TRUE install all required s
 #############################################################
 # Python
 
-set(MIN_PYTHON_VERSION "3.7")
+set(MIN_PYTHON_VERSION "3.9")
 set(Python_FIND_FRAMEWORK "LAST")
 
 
@@ -1103,7 +1125,7 @@ if (WITH_CORE AND WITH_BINDINGS)
   include(SIPMacros)
 
   set(SIP_INCLUDES ${PYQT_SIP_DIR} ${CMAKE_SOURCE_DIR}/python)
-  set(SIP_CONCAT_PARTS 22)
+  set(SIP_CONCAT_PARTS 25)
 
   if (NOT BINDINGS_GLOBAL_INSTALL)
     set(Python_SITEARCH ${QGIS_DATA_DIR}/python)
@@ -1219,39 +1241,8 @@ endif()
 #############################################################
 # Enable packaging
 if (WITH_CORE)
-  # Do not warn about runtime libs when building using VS Express
-  if(NOT DEFINED CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_NO_WARNINGS)
-    set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_NO_WARNINGS ON)
-  endif()
-
-  if(QGIS_INSTALL_SYS_LIBS)
-    include(InstallRequiredSystemLibraries)
-  endif()
-
-  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "QGIS")
-  set(CPACK_PACKAGE_VENDOR "Open Source Geospatial Foundation")
-  set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/README")
-  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/COPYING")
-  set(CPACK_PACKAGE_INSTALL_DIRECTORY "QGIS ${COMPLETE_VERSION}")
-  if(WIN32 AND NOT UNIX)
-    # There is a bug in NSI that does not handle full unix paths properly. Make
-    # sure there is at least one set of four (4) backslashes.
-    set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/win_build\\\\sidebar.bmp")
-    set(CPACK_NSIS_INSTALLED_ICON_NAME "\\\\qgis.exe")
-    set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_INSTALL_DIRECTORY} QGIS")
-    set(CPACK_NSIS_HELP_LINK "http:\\\\\\\\qgis.org")
-    set(CPACK_NSIS_URL_INFO_ABOUT "http:\\\\\\\\qgis.org")
-    set(CPACK_NSIS_CONTACT "info@qgis.org")
-    set(CPACK_NSIS_MODIFY_PATH ON)
-
-  #  set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "  !include \\\"${CMAKE_SOURCE_DIR}\\\\win_build\\\\extra.nsh\\\"")
-  else()
-    #set(CPACK_STRIP_FILES "QGIS")
-    #set(CPACK_SOURCE_STRIP_FILES "")
-  endif()
-  set(CPACK_PACKAGE_EXECUTABLES "qgis" "QGIS")
-  set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
-  include(CPack)
+  include(Bundle)
+  include(VcpkgInstallDeps)
 endif()
 
 if (UNIX AND NOT APPLE)

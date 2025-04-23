@@ -124,7 +124,7 @@ Example
 :return: ``False`` if a field exists with the provided widgetName. In this case
          :py:class:`QgsVectorLayer`.setEditorWidgetSetup should be used.
 
-.. seealso:: :py:func:`QgsVectorLayer.setEditorWidgetSetup`
+.. seealso:: :py:func:`QgsVectorLayer.setEditorWidgetSetup` for field configurations.
 %End
 
     QVariantMap widgetConfig( const QString &widgetName ) const;
@@ -270,8 +270,9 @@ Serialize on project save
 %Docstring
 Deserialize drag and drop designer elements.
 
-.. deprecated:: QGIS 3.18
-   use :py:class:`QgsAttributeEditorElement`.create instead
+.. deprecated:: 3.18
+
+   Use :py:class:`QgsAttributeEditorElement`.create instead.
 %End
 
     explicit QgsEditFormConfig();

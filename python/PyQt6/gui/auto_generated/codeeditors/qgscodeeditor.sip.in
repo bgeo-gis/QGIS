@@ -150,16 +150,18 @@ Set margin visible state
 
 :param margin: Set margin in the editor
 
-.. deprecated::
-   Use base class methods for individual margins instead, or :py:func:`~QgsCodeEditor.setLineNumbersVisible`
+.. deprecated:: 3.40
+
+   Use base class methods for individual margins instead, or :py:func:`~QgsCodeEditor.setLineNumbersVisible`.
 %End
 
  bool marginVisible() /Deprecated/;
 %Docstring
 Returns whether margins are in a visible state
 
-.. deprecated::
-   Use base class methods for individual margins instead, or :py:func:`~QgsCodeEditor.lineNumbersVisible`
+.. deprecated:: 3.40
+
+   Use base class methods for individual margins instead, or :py:func:`~QgsCodeEditor.lineNumbersVisible`.
 %End
 
     void setLineNumbersVisible( bool visible );
@@ -362,6 +364,17 @@ no selection is made.
 Convenience function to set the selection using linear indexes
 
 .. versionadded:: 3.36
+%End
+
+    virtual void callTip();
+
+    int wrapPosition( int line = -1 );
+%Docstring
+Returns the linear position of the start of the last wrapped part for the specified line, or
+for the current line if line = -1
+If wrapping is disabled, returns -1 instead
+
+.. versionadded:: 3.40
 %End
 
   public slots:

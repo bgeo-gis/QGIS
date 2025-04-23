@@ -551,7 +551,7 @@ double QgsExpression::evaluateToDouble( const QString &text, const double fallba
 
   QgsExpressionContext context;
   context << QgsExpressionContextUtils::globalScope()
-          << QgsExpressionContextUtils::projectScope( QgsProject::instance() );
+          << QgsExpressionContextUtils::projectScope( QgsProject::instance() ); // skip-keyword-check
 
   QVariant result = expr.evaluate( &context );
   convertedValue = result.toDouble( &ok );
@@ -771,6 +771,11 @@ void QgsExpression::initVariableHelp()
   sVariableHelpTexts()->insert( QStringLiteral( "layer_crs" ), QCoreApplication::translate( "variable_help", "CRS Authority ID of current layer." ) );
   sVariableHelpTexts()->insert( QStringLiteral( "layer" ), QCoreApplication::translate( "variable_help", "The current layer." ) );
   sVariableHelpTexts()->insert( QStringLiteral( "layer_crs_ellipsoid" ), QCoreApplication::translate( "variable_help", "Ellipsoid acronym of current layer CRS." ) );
+
+  sVariableHelpTexts()->insert( QStringLiteral( "layer_vertical_crs" ), QCoreApplication::translate( "variable_help", "Identifier for the vertical coordinate reference system of the layer (e.g., 'EPSG:5703')." ) );
+  sVariableHelpTexts()->insert( QStringLiteral( "layer_vertical_crs_definition" ), QCoreApplication::translate( "variable_help", "Vertical coordinate reference system of layer (full definition)." ) );
+  sVariableHelpTexts()->insert( QStringLiteral( "layer_vertical_crs_description" ), QCoreApplication::translate( "variable_help", "Name of the vertical coordinate reference system of the layer." ) );
+  sVariableHelpTexts()->insert( QStringLiteral( "layer_vertical_crs_wkt" ), QCoreApplication::translate( "variable_help", "WKT definition of the vertical coordinate reference system of the layer." ) );
 
   //feature variables
   sVariableHelpTexts()->insert( QStringLiteral( "feature" ), QCoreApplication::translate( "variable_help", "The current feature being evaluated. This can be used with the 'attribute' function to evaluate attribute values from the current feature." ) );
@@ -1017,10 +1022,10 @@ QString QgsExpression::formatPreviewString( const QVariant &value, const bool ht
   const QString startToken = htmlOutput ? QStringLiteral( "<i>&lt;" ) : QStringLiteral( "<" );
   const QString endToken = htmlOutput ? QStringLiteral( "&gt;</i>" ) : QStringLiteral( ">" );
 
-  if ( value.userType() == qMetaTypeId< QgsGeometry>() )
+  QgsGeometry geom = QgsExpressionUtils::getGeometry( value, nullptr );
+  if ( !geom.isNull() )
   {
     //result is a geometry
-    QgsGeometry geom = value.value<QgsGeometry>();
     if ( geom.isNull() )
       return startToken + tr( "empty geometry" ) + endToken;
     else
@@ -1138,6 +1143,45 @@ QString QgsExpression::formatPreviewString( const QVariant &value, const bool ht
       listStr += QLatin1Char( ' ' );
     listStr += QLatin1Char( ']' );
     return listStr;
+  }
+  else if ( value.type() == QVariant::Color )
+  {
+    const QColor color = value.value<QColor>();
+
+    if ( !color.isValid() )
+    {
+      return tr( "<i>Invalid</i>" );
+    }
+
+    switch ( color.spec() )
+    {
+      case QColor::Spec::Cmyk:
+        return QStringLiteral( "CMYKA: %1,%2,%3,%4,%5" )
+               .arg( color.cyanF(), 0, 'f', 2 ).arg( color.magentaF(), 0, 'f', 2 )
+               .arg( color.yellowF(), 0, 'f', 2 ).arg( color.blackF(), 0, 'f', 2 )
+               .arg( color.alphaF(), 0, 'f', 2 );
+
+      case QColor::Spec::Hsv:
+        return QStringLiteral( "HSVA: %1,%2,%3,%4" )
+               .arg( color.hsvHueF(), 0, 'f', 2 ).arg( color.hsvSaturationF(), 0, 'f', 2 )
+               .arg( color.valueF(), 0, 'f', 2 ).arg( color.alphaF(), 0, 'f', 2 );
+
+      case QColor::Spec::Hsl:
+        return QStringLiteral( "HSLA: %1,%2,%3,%4" )
+               .arg( color.hslHueF(), 0, 'f', 2 ).arg( color.hslSaturationF(), 0, 'f', 2 )
+               .arg( color.lightnessF(), 0, 'f', 2 ).arg( color.alphaF(), 0, 'f', 2 );
+
+      case QColor::Spec::Rgb:
+      case QColor::Spec::ExtendedRgb:
+        return QStringLiteral( "RGBA: %1,%2,%3,%4" )
+               .arg( color.redF(), 0, 'f', 2 ).arg( color.greenF(), 0, 'f', 2 )
+               .arg( color.blueF(), 0, 'f', 2 ).arg( color.alphaF(), 0, 'f', 2 );
+
+      case QColor::Spec::Invalid:
+        return tr( "<i>Invalid</i>" );
+    }
+    QgsDebugError( QStringLiteral( "Unknown color format: %1" ).arg( color.spec() ) );
+    return tr( "<i>Unknown color format: %1</i>" ).arg( color.spec() );
   }
   else if ( value.userType() == QMetaType::Type::Int ||
             value.userType() == QMetaType::Type::UInt ||

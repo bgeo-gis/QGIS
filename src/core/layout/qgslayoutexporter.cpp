@@ -26,6 +26,7 @@
 #include "qgslayoutgeopdfexporter.h"
 #include "qgslinestring.h"
 #include "qgsmessagelog.h"
+#include "qgsprojectstylesettings.h"
 #include "qgslabelingresults.h"
 #include "qgssettingsentryimpl.h"
 #include "qgssettingstree.h"
@@ -36,6 +37,11 @@
 #include <QBuffer>
 #include <QTimeZone>
 #include <QTextStream>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+#include <QColorSpace>
+#include <QPdfOutputIntent>
+#endif
+#include <QXmlStreamWriter>
 
 #include "gdal.h"
 #include "cpl_conv.h"
@@ -559,9 +565,9 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
     mLayout->renderContext().setSimplifyMethod( createExportSimplifyMethod() );
   }
 
-  std::unique_ptr< QgsLayoutGeoPdfExporter > geoPdfExporter;
+  std::unique_ptr< QgsLayoutGeospatialPdfExporter > geospatialPdfExporter;
   if ( settings.writeGeoPdf || settings.exportLayersAsSeperateFiles )  //#spellok
-    geoPdfExporter = std::make_unique< QgsLayoutGeoPdfExporter >( mLayout );
+    geospatialPdfExporter = std::make_unique< QgsLayoutGeospatialPdfExporter >( mLayout );
 
   mLayout->renderContext().setFlags( settings.flags );
 
@@ -590,17 +596,17 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
 
     const QList<QGraphicsItem *> items = mLayout->items( Qt::AscendingOrder );
 
-    QList< QgsLayoutGeoPdfExporter::ComponentLayerDetail > pdfComponents;
+    QList< QgsLayoutGeospatialPdfExporter::ComponentLayerDetail > pdfComponents;
 
     const QDir baseDir = settings.exportLayersAsSeperateFiles ? QFileInfo( filePath ).dir() : QDir();  //#spellok
     const QString baseFileName = settings.exportLayersAsSeperateFiles ? QFileInfo( filePath ).completeBaseName() : QString();  //#spellok
 
     QSet<QString> mutuallyExclusiveGroups;
 
-    auto exportFunc = [this, &subSettings, &pdfComponents, &geoPdfExporter, &settings, &baseDir, &baseFileName, &mutuallyExclusiveGroups]( unsigned int layerId, const QgsLayoutItem::ExportLayerDetail & layerDetail )->QgsLayoutExporter::ExportResult
+    auto exportFunc = [this, &subSettings, &pdfComponents, &geospatialPdfExporter, &settings, &baseDir, &baseFileName, &mutuallyExclusiveGroups]( unsigned int layerId, const QgsLayoutItem::ExportLayerDetail & layerDetail )->QgsLayoutExporter::ExportResult
     {
       ExportResult layerExportResult = Success;
-      QgsLayoutGeoPdfExporter::ComponentLayerDetail component;
+      QgsLayoutGeospatialPdfExporter::ComponentLayerDetail component;
       component.name = layerDetail.name;
       component.mapLayerId = layerDetail.mapLayerId;
       component.opacity = layerDetail.opacity;
@@ -612,7 +618,7 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
         mutuallyExclusiveGroups.insert( layerDetail.mapTheme );
       }
 
-      component.sourcePdfPath = settings.writeGeoPdf ? geoPdfExporter->generateTemporaryFilepath( QStringLiteral( "layer_%1.pdf" ).arg( layerId ) ) : baseDir.filePath( QStringLiteral( "%1_%2.pdf" ).arg( baseFileName ).arg( layerId, 4, 10, QChar( '0' ) ) );
+      component.sourcePdfPath = settings.writeGeoPdf ? geospatialPdfExporter->generateTemporaryFilepath( QStringLiteral( "layer_%1.pdf" ).arg( layerId ) ) : baseDir.filePath( QStringLiteral( "%1_%2.pdf" ).arg( baseFileName ).arg( layerId, 4, 10, QChar( '0' ) ) );
       pdfComponents << component;
       QPdfWriter printer = QPdfWriter( component.sourcePdfPath );
       preparePrintAsPdf( mLayout, &printer, component.sourcePdfPath );
@@ -638,7 +644,7 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
 
     if ( settings.writeGeoPdf )
     {
-      QgsAbstractGeoPdfExporter::ExportDetails details;
+      QgsAbstractGeospatialPdfExporter::ExportDetails details;
       details.dpi = settings.dpi;
       // TODO - multipages
       QgsLayoutSize pageSize = mLayout->pageCollection()->page( 0 )->sizeWithUnits();
@@ -648,10 +654,10 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
 
       if ( settings.exportMetadata )
       {
-        // copy layout metadata to GeoPDF export settings
+        // copy layout metadata to geospatial PDF export settings
         details.author = mLayout->project()->metadata().author();
-        details.producer = QStringLiteral( "QGIS %1" ).arg( Qgis::version() );
-        details.creator = QStringLiteral( "QGIS %1" ).arg( Qgis::version() );
+        details.producer = getCreator();
+        details.creator = getCreator();
         details.creationDateTime = mLayout->project()->metadata().creationDateTime();
         details.subject = mLayout->project()->metadata().abstract();
         details.title = mLayout->project()->metadata().title();
@@ -671,7 +677,7 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
         mLayout->layoutItems( maps );
         for ( QgsLayoutItemMap *map : std::as_const( maps ) )
         {
-          QgsAbstractGeoPdfExporter::GeoReferencedSection georef;
+          QgsAbstractGeospatialPdfExporter::GeoReferencedSection georef;
           georef.crs = map->crs();
 
           const QPointF topLeft = map->mapToScene( QPointF( 0, 0 ) );
@@ -696,26 +702,26 @@ QgsLayoutExporter::ExportResult QgsLayoutExporter::exportToPdf( const QString &f
           const QgsPointXY bottomLeftMap = t.map( bottomLeft );
           const QgsPointXY bottomRightMap = t.map( bottomRight );
 
-          georef.controlPoints << QgsAbstractGeoPdfExporter::ControlPoint( QgsPointXY( topLeftMm.x(), topLeftMm.y() ), topLeftMap );
-          georef.controlPoints << QgsAbstractGeoPdfExporter::ControlPoint( QgsPointXY( topRightMm.x(), topRightMm.y() ), topRightMap );
-          georef.controlPoints << QgsAbstractGeoPdfExporter::ControlPoint( QgsPointXY( bottomLeftMm.x(), bottomLeftMm.y() ), bottomLeftMap );
-          georef.controlPoints << QgsAbstractGeoPdfExporter::ControlPoint( QgsPointXY( bottomRightMm.x(), bottomRightMm.y() ), bottomRightMap );
+          georef.controlPoints << QgsAbstractGeospatialPdfExporter::ControlPoint( QgsPointXY( topLeftMm.x(), topLeftMm.y() ), topLeftMap );
+          georef.controlPoints << QgsAbstractGeospatialPdfExporter::ControlPoint( QgsPointXY( topRightMm.x(), topRightMm.y() ), topRightMap );
+          georef.controlPoints << QgsAbstractGeospatialPdfExporter::ControlPoint( QgsPointXY( bottomLeftMm.x(), bottomLeftMm.y() ), bottomLeftMap );
+          georef.controlPoints << QgsAbstractGeospatialPdfExporter::ControlPoint( QgsPointXY( bottomRightMm.x(), bottomRightMm.y() ), bottomRightMap );
           details.georeferencedSections << georef;
         }
       }
 
-      details.customLayerTreeGroups = geoPdfExporter->customLayerTreeGroups();
-      details.initialLayerVisibility = geoPdfExporter->initialLayerVisibility();
-      details.layerOrder = geoPdfExporter->layerOrder();
-      details.layerTreeGroupOrder = geoPdfExporter->layerTreeGroupOrder();
+      details.customLayerTreeGroups = geospatialPdfExporter->customLayerTreeGroups();
+      details.initialLayerVisibility = geospatialPdfExporter->initialLayerVisibility();
+      details.layerOrder = geospatialPdfExporter->layerOrder();
+      details.layerTreeGroupOrder = geospatialPdfExporter->layerTreeGroupOrder();
       details.includeFeatures = settings.includeGeoPdfFeatures;
       details.useOgcBestPracticeFormatGeoreferencing = settings.useOgcBestPracticeFormatGeoreferencing;
       details.useIso32000ExtensionFormatGeoreferencing = settings.useIso32000ExtensionFormatGeoreferencing;
 
-      if ( !geoPdfExporter->finalize( pdfComponents, filePath, details ) )
+      if ( !geospatialPdfExporter->finalize( pdfComponents, filePath, details ) )
       {
         result = PrintError;
-        mErrorMessage = geoPdfExporter->errorMessage();
+        mErrorMessage = geospatialPdfExporter->errorMessage();
       }
     }
     else
@@ -1264,7 +1270,7 @@ QMap<QString, QgsLabelingResults *> QgsLayoutExporter::takeLabelingResults()
   return res;
 }
 
-void QgsLayoutExporter::preparePrintAsPdf( QgsLayout *layout, QPagedPaintDevice *device, const QString &filePath )
+void QgsLayoutExporter::preparePrintAsPdf( QgsLayout *layout, QPdfWriter *device, const QString &filePath )
 {
   QFileInfo fi( filePath );
   QDir dir;
@@ -1275,6 +1281,54 @@ void QgsLayoutExporter::preparePrintAsPdf( QgsLayout *layout, QPagedPaintDevice 
 
   updatePrinterPageSize( layout, device, firstPageToBeExported( layout ) );
 
+  // force a non empty title to avoid invalid (according to specification) PDF/X-4
+  const QString title = !layout->project() || layout->project()->metadata().title().isEmpty() ?
+                        fi.baseName() : layout->project()->metadata().title();
+
+  device->setTitle( title );
+
+  QPagedPaintDevice::PdfVersion pdfVersion = QPagedPaintDevice::PdfVersion_1_4;
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+
+  if ( const QgsProjectStyleSettings *styleSettings = ( layout->project() ? layout->project()->styleSettings() : nullptr ) )
+  {
+    // We don't want to let AUTO color model because we could end up writing RGB colors with a CMYK
+    // output intent color model and vice versa, so we force color conversion
+    switch ( styleSettings->colorModel() )
+    {
+      case Qgis::ColorModel::Cmyk:
+        device->setColorModel( QPdfWriter::ColorModel::CMYK );
+        break;
+
+      case Qgis::ColorModel::Rgb:
+        device->setColorModel( QPdfWriter::ColorModel::RGB );
+        break;
+    }
+
+    const QColorSpace colorSpace = styleSettings->colorSpace();
+    if ( colorSpace.isValid() )
+    {
+      QPdfOutputIntent outputIntent;
+      outputIntent.setOutputProfile( colorSpace );
+      outputIntent.setOutputCondition( colorSpace.description() );
+
+      // There is no way to actually get the color space registry identifier or even
+      // the registry it comes from.
+      outputIntent.setOutputConditionIdentifier( QStringLiteral( "Unknown identifier" ) );
+      outputIntent.setRegistryName( QStringLiteral( "Unknown registry" ) );
+      device->setOutputIntent( outputIntent );
+
+      // PDF/X-4 standard allows PDF to be printing ready and is only possible if a color space has been set
+      pdfVersion = QPagedPaintDevice::PdfVersion_X4;
+    }
+  }
+
+#endif
+
+  device->setPdfVersion( pdfVersion );
+  setXmpMetadata( device, layout );
+
   // TODO: add option for this in layout
   // May not work on Windows or non-X11 Linux. Works fine on Mac using QPrinter::NativeFormat
   //printer.setFontEmbeddingEnabled( true );
@@ -1282,7 +1336,7 @@ void QgsLayoutExporter::preparePrintAsPdf( QgsLayout *layout, QPagedPaintDevice 
 #if defined(HAS_KDE_QT5_PDF_TRANSFORM_FIX) || QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
   // paint engine hack not required, fixed upstream
 #else
-  QgsPaintEngineHack::fixEngineFlags( device->paintEngine() );
+  QgsPaintEngineHack::fixEngineFlags( static_cast<QPaintDevice *>( device )->paintEngine() );
 #endif
 }
 
@@ -1529,7 +1583,7 @@ void QgsLayoutExporter::appendMetadataToSvg( QDomDocument &svg ) const
   };
 
   addAgentNode( QStringLiteral( "dc:creator" ), metadata.author() );
-  addAgentNode( QStringLiteral( "dc:publisher" ), QStringLiteral( "QGIS %1" ).arg( Qgis::version() ) );
+  addAgentNode( QStringLiteral( "dc:publisher" ), getCreator() );
 
   // keywords
   {
@@ -1714,7 +1768,7 @@ bool QgsLayoutExporter::georeferenceOutputPrivate( const QString &file, QgsLayou
       GDALSetMetadataItem( outputDS.get(), "CREATION_DATE", creationDateString.toUtf8().constData(), nullptr );
 
       GDALSetMetadataItem( outputDS.get(), "AUTHOR", mLayout->project()->metadata().author().toUtf8().constData(), nullptr );
-      const QString creator = QStringLiteral( "QGIS %1" ).arg( Qgis::version() );
+      const QString creator = getCreator();
       GDALSetMetadataItem( outputDS.get(), "CREATOR", creator.toUtf8().constData(), nullptr );
       GDALSetMetadataItem( outputDS.get(), "PRODUCER", creator.toUtf8().constData(), nullptr );
       GDALSetMetadataItem( outputDS.get(), "SUBJECT", mLayout->project()->metadata().abstract().toUtf8().constData(), nullptr );
@@ -2172,7 +2226,7 @@ bool QgsLayoutExporter::saveImage( const QImage &image, const QString &imageFile
   if ( projectForMetadata )
   {
     w.setText( QStringLiteral( "Author" ), projectForMetadata->metadata().author() );
-    const QString creator = QStringLiteral( "QGIS %1" ).arg( Qgis::version() );
+    const QString creator = getCreator();
     w.setText( QStringLiteral( "Creator" ), creator );
     w.setText( QStringLiteral( "Producer" ), creator );
     w.setText( QStringLiteral( "Subject" ), projectForMetadata->metadata().abstract() );
@@ -2189,4 +2243,130 @@ bool QgsLayoutExporter::saveImage( const QImage &image, const QString &imageFile
     w.setText( QStringLiteral( "Keywords" ), keywordString );
   }
   return w.write( image );
+}
+
+QString QgsLayoutExporter::getCreator()
+{
+  return QStringLiteral( "QGIS %1" ).arg( Qgis::version() );
+}
+
+void QgsLayoutExporter::setXmpMetadata( QPdfWriter *pdfWriter, QgsLayout *layout )
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+  QUuid documentId = pdfWriter->documentId();
+#else
+  QUuid documentId = QUuid::createUuid();
+#endif
+
+  // XMP metadata date format differs from PDF dictionary one
+  const QDateTime creationDateTime = layout->project() ? layout->project()->metadata().creationDateTime() : QDateTime();
+  const QString metaDataDate = creationDateTime.isValid() ? creationDateTime.toOffsetFromUtc( creationDateTime.offsetFromUtc() ).toString( Qt::ISODate ) : QString();
+  const QString title = pdfWriter->title();
+  const QString creator = getCreator();
+  const QString producer = creator;
+  const QString author = layout->project() ? layout->project()->metadata().author() : QString();
+
+  // heavily inspired from qpdf.cpp QPdfEnginePrivate::writeXmpDocumentMetaData
+
+  const QLatin1String xmlNS( "http://www.w3.org/XML/1998/namespace" );
+  const QLatin1String adobeNS( "adobe:ns:meta/" );
+  const QLatin1String rdfNS( "http://www.w3.org/1999/02/22-rdf-syntax-ns#" );
+  const QLatin1String dcNS( "http://purl.org/dc/elements/1.1/" );
+  const QLatin1String xmpNS( "http://ns.adobe.com/xap/1.0/" );
+  const QLatin1String xmpMMNS( "http://ns.adobe.com/xap/1.0/mm/" );
+  const QLatin1String pdfNS( "http://ns.adobe.com/pdf/1.3/" );
+  const QLatin1String pdfaidNS( "http://www.aiim.org/pdfa/ns/id/" );
+  const QLatin1String pdfxidNS( "http://www.npes.org/pdfx/ns/id/" );
+
+  QByteArray xmpMetadata;
+  QBuffer output( &xmpMetadata );
+  output.open( QIODevice::WriteOnly );
+  output.write( "<?xpacket begin='' ?>" );
+
+  QXmlStreamWriter w( &output );
+  w.setAutoFormatting( true );
+  w.writeNamespace( adobeNS, "x" );  //#spellok
+  w.writeNamespace( rdfNS, "rdf" );  //#spellok
+  w.writeNamespace( dcNS, "dc" );  //#spellok
+  w.writeNamespace( xmpNS, "xmp" );  //#spellok
+  w.writeNamespace( xmpMMNS, "xmpMM" );  //#spellok
+  w.writeNamespace( pdfNS, "pdf" );  //#spellok
+  w.writeNamespace( pdfaidNS, "pdfaid" );  //#spellok
+  w.writeNamespace( pdfxidNS, "pdfxid" );  //#spellok
+
+  w.writeStartElement( adobeNS, "xmpmeta" );
+  w.writeStartElement( rdfNS, "RDF" );
+
+  // DC
+  w.writeStartElement( rdfNS, "Description" );
+  w.writeAttribute( rdfNS, "about", "" );
+  w.writeStartElement( dcNS, "title" );
+  w.writeStartElement( rdfNS, "Alt" );
+  w.writeStartElement( rdfNS, "li" );
+  w.writeAttribute( xmlNS, "lang", "x-default" );
+  w.writeCharacters( title );
+  w.writeEndElement();
+  w.writeEndElement();
+  w.writeEndElement();
+
+  w.writeStartElement( dcNS, "creator" );
+  w.writeStartElement( rdfNS, "Seq" );
+  w.writeStartElement( rdfNS, "li" );
+  w.writeCharacters( author );
+  w.writeEndElement();
+  w.writeEndElement();
+  w.writeEndElement();
+
+  w.writeEndElement();
+
+  // PDF
+  w.writeStartElement( rdfNS, "Description" );
+  w.writeAttribute( rdfNS, "about", "" );
+  w.writeAttribute( pdfNS, "Producer", producer );
+  w.writeAttribute( pdfNS, "Trapped", "False" );
+  w.writeEndElement();
+
+  // XMP
+  w.writeStartElement( rdfNS, "Description" );
+  w.writeAttribute( rdfNS, "about", "" );
+  w.writeAttribute( xmpNS, "CreatorTool", creator );
+  w.writeAttribute( xmpNS, "CreateDate", metaDataDate );
+  w.writeAttribute( xmpNS, "ModifyDate", metaDataDate );
+  w.writeAttribute( xmpNS, "MetadataDate", metaDataDate );
+  w.writeEndElement();
+
+  // XMPMM
+  w.writeStartElement( rdfNS, "Description" );
+  w.writeAttribute( rdfNS, "about", "" );
+  w.writeAttribute( xmpMMNS, "DocumentID", "uuid:" + documentId.toString( QUuid::WithoutBraces ) );
+  w.writeAttribute( xmpMMNS, "VersionID", "1" );
+  w.writeAttribute( xmpMMNS, "RenditionClass", "default" );
+  w.writeEndElement();
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+
+  // Version-specific
+  switch ( pdfWriter->pdfVersion() )
+  {
+    case QPagedPaintDevice::PdfVersion_1_4:
+    case QPagedPaintDevice::PdfVersion_A1b: // A1b and 1.6 are not used by QGIS
+    case QPagedPaintDevice::PdfVersion_1_6:
+      break;
+    case QPagedPaintDevice::PdfVersion_X4:
+      w.writeStartElement( rdfNS, "Description" );
+      w.writeAttribute( rdfNS, "about", "" );
+      w.writeAttribute( pdfxidNS, "GTS_PDFXVersion", "PDF/X-4" );
+      w.writeEndElement();
+      break;
+  }
+
+#endif
+
+  w.writeEndElement(); // </RDF>
+  w.writeEndElement(); // </xmpmeta>
+
+  w.writeEndDocument();
+  output.write( "<?xpacket end='w'?>" );
+
+  pdfWriter->setDocumentXmpMetadata( xmpMetadata );
 }

@@ -76,7 +76,7 @@ Draws text within a rectangle using the specified settings.
 :param flags: text rendering flags (since QGIS 3.24)
 :param mode: text layout mode. Only :py:class:`Qgis`.TextLayoutMode.Rectangle, :py:class:`Qgis`.TextLayoutMode.RectangleCapHeightBased and :py:class:`Qgis`.TextLayoutMode.RectangleAscentBased are accepted (since QGIS 3.30)
 
-.. seealso:: :py:func:`drawDocument`
+.. seealso:: :py:func:`drawDocument` which is more efficient if the text document and metrics have already been calculated.
 %End
 
     static void drawDocument( const QRectF &rect,
@@ -130,6 +130,35 @@ Draws text at a point origin using the specified settings.
                        formats like SVG to maintain text as text objects, but at the cost of degraded
                        rendering and may result in side effects like misaligned text buffers. This setting is deprecated and has no effect
                        as of QGIS 3.4.3 and the text format should be set using :py:func:`QgsRenderContext.setTextRenderFormat()` instead.
+%End
+
+    static void drawDocument( QPointF point,
+                              const QgsTextFormat &format,
+                              const QgsTextDocument &document,
+                              const QgsTextDocumentMetrics &metrics,
+                              QgsRenderContext &context,
+                              Qgis::TextHorizontalAlignment alignment,
+                              double rotation );
+%Docstring
+Draws a text document at a point origin using the specified settings.
+
+Calling this method is more efficient than calling :py:func:`~QgsTextRenderer.drawText` if the text document and metrics have already
+been calculated.
+
+.. warning::
+
+   Unlike :py:func:`~QgsTextRenderer.drawText`, this method does not automatically update data defined properties in the text ``format``. This
+   is the caller's responsibility to do, and must be done prior to generating the text ``document`` and ``metrics``.
+
+:param point: origin of text, in painter units
+:param format: base text format
+:param document: text document to draw
+:param metrics: precalculated text metrics
+:param context: destination render context
+:param alignment: horizontal alignment
+:param rotation: text rotation
+
+.. versionadded:: 3.40
 %End
 
     static void drawTextOnLine( const QPolygonF &line, const QString &text,
@@ -187,8 +216,9 @@ Draws a single component of rendered text using the specified settings.
                        rendering and may result in side effects like misaligned text buffers. This setting is deprecated and has no effect
                        as of QGIS 3.4.3 and the text format should be set using :py:func:`QgsRenderContext.setTextRenderFormat()` instead.
 
-.. deprecated::
-   Private API only, will be removed in 4.0
+.. deprecated:: 3.40
+
+   Private API only, will be removed in 4.0.
 %End
 
  static void drawPart( QPointF origin, double rotation, Qgis::TextHorizontalAlignment alignment, const QStringList &textLines,
@@ -211,8 +241,9 @@ Draws a single component of rendered text using the specified settings.
                        rendering and may result in side effects like misaligned text buffers. This setting is deprecated and has no effect
                        as of QGIS 3.4.3 and the text format should be set using :py:func:`QgsRenderContext.setTextRenderFormat()` instead.
 
-.. deprecated::
-   Private API only, will be removed in 4.0
+.. deprecated:: 3.40
+
+   Private API only, will be removed in 4.0.
 %End
 
     static QFontMetricsF fontMetrics( QgsRenderContext &context, const QgsTextFormat &format, double scaleFactor = 1.0 );

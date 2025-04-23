@@ -101,7 +101,7 @@ class GUI_EXPORT QgsRelationEditorWidget : public QgsAbstractRelationEditorWidge
      */
     enum Button SIP_ENUM_BASETYPE( IntFlag )
     {
-      NoButton = 0, //!< No button (since QGIS 3.20)
+      NoButton = 0, //!< No button \since QGIS 3.20
       Link = 1 << 1, //!< Link button
       Unlink = 1 << 2, //!< Unlink button
       SaveChildEdits = 1 << 3, //!< Save child edits button
@@ -153,7 +153,7 @@ class GUI_EXPORT QgsRelationEditorWidget : public QgsAbstractRelationEditorWidge
 
     /**
      * Duplicates a feature
-     * \deprecated since QGIS 3.18, use duplicateSelectedFeatures() instead
+     * \deprecated QGIS 3.18. Use duplicateSelectedFeatures() instead.
      */
     Q_DECL_DEPRECATED void duplicateFeature() SIP_DEPRECATED;
 
@@ -204,7 +204,10 @@ class GUI_EXPORT QgsRelationEditorWidget : public QgsAbstractRelationEditorWidge
 
     void addFeature();
     void addFeatureGeometry();
-    void toggleEditing( bool state );
+
+    // TODO -- someone familiar with this widget needs to fix this:
+    void toggleEditing( bool state ); // cppcheck-suppress duplInheritedMember
+
     void showContextMenu( QgsActionMenu *menu, QgsFeatureId fid );
     void mapToolDeactivated();
     void onDigitizingCompleted( const QgsFeature &feature );

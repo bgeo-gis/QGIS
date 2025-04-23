@@ -65,7 +65,7 @@ class GUI_EXPORT QgsMapToolCapture : public QgsMapToolAdvancedDigitizing
     {
       NoCapabilities = 1 << 0, //!< No specific capabilities
       SupportsCurves = 1 << 1, //!< Supports curved geometries input
-      ValidateGeometries = 1 << 2, //!< Tool supports geometry validation (since QGIS 3.22)
+      ValidateGeometries = 1 << 2, //!< Tool supports geometry validation \since QGIS 3.22
     };
 
     Q_DECLARE_FLAGS( Capabilities, Capability )
@@ -194,14 +194,14 @@ class GUI_EXPORT QgsMapToolCapture : public QgsMapToolAdvancedDigitizing
 
     /**
      * Enable the digitizing with curve
-     * \deprecated since QGIS 3.26 use setCurrentCaptureTechnique() instead
+     * \deprecated QGIS 3.26. Use setCurrentCaptureTechnique() instead.
      */
     Q_DECL_DEPRECATED void setCircularDigitizingEnabled( bool enable ) SIP_DEPRECATED;
 
     /**
      * Toggles the stream digitizing mode.
      * \since QGIS 3.20
-    * \deprecated since QGIS 3.26 use setCurrentCaptureTechnique() instead
+    * \deprecated QGIS 3.26. Use setCurrentCaptureTechnique() instead.
      */
     Q_DECL_DEPRECATED void setStreamDigitizingEnabled( bool enable ) SIP_DEPRECATED;
 
@@ -297,7 +297,7 @@ class GUI_EXPORT QgsMapToolCapture : public QgsMapToolAdvancedDigitizing
     /**
      * List of digitized points
      * \returns List of points
-     * \deprecated since QGIS 3.12 - will be removed in QGIS 4.0. Use the variant returns QgsPoint objects instead of QgsPointXY.
+     * \deprecated QGIS 3.12. Will be removed in QGIS 4.0. Use the variant returns QgsPoint objects instead of QgsPointXY.
      */
     Q_DECL_DEPRECATED QVector<QgsPointXY> points() const SIP_DEPRECATED;
 
@@ -314,7 +314,7 @@ class GUI_EXPORT QgsMapToolCapture : public QgsMapToolAdvancedDigitizing
      * Set the points on which to work
      *
      * \param pointList A list of points
-     * \deprecated since QGIS 3.12 - will be removed in QGIS 4.0. Use the variant which accepts QgsPoint objects instead of QgsPointXY.
+     * \deprecated QGIS 3.12. Will be removed in QGIS 4.0. Use the variant which accepts QgsPoint objects instead of QgsPointXY.
      */
     Q_DECL_DEPRECATED void setPoints( const QVector<QgsPointXY> &pointList ) SIP_DEPRECATED;
 

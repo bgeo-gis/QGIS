@@ -343,6 +343,7 @@ class GUI_EXPORT QgsSvgSelectorListModel : public QAbstractListModel
      */
     void addSvgs( const QStringList &svgs );
 
+    friend class TestQgsSvgSelectorWidget;
 };
 
 
@@ -373,6 +374,8 @@ class GUI_EXPORT QgsSvgSelectorGroupsModel : public QStandardItemModel
 /**
  * \ingroup gui
  * \class QgsSvgSelectorWidget
+ *
+ * \brief A widget allowing selection of an SVG file, and configuration of SVG related parameters.
  */
 class GUI_EXPORT QgsSvgSelectorWidget : public QWidget, private Ui::WidgetSvgSelector
 {
@@ -406,7 +409,7 @@ class GUI_EXPORT QgsSvgSelectorWidget : public QWidget, private Ui::WidgetSvgSel
     /**
      * Returns if the group box to fill parameters is visible
      * \since QGIS 3.18
-     * \deprecated Use allowParameters()
+     * \deprecated QGIS 3.40. Use allowParameters().
      */
     Q_DECL_DEPRECATED bool allowParamerters() const SIP_DEPRECATED {return mAllowParameters;} // spellok
 
@@ -445,6 +448,10 @@ class GUI_EXPORT QgsSvgSelectorWidget : public QWidget, private Ui::WidgetSvgSel
     void setSvgParameters( const QMap<QString, QgsProperty> &parameters );
 
   signals:
+
+    /**
+     * Emitted when an SVG is selected in the widget.
+     */
     void svgSelected( const QString &path );
 
     /**

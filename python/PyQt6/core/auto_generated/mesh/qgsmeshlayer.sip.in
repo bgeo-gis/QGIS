@@ -32,7 +32,7 @@ Mesh data providers
 -------------------
 
 Memory data providerType (mesh_memory)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The memory data provider is used to construct in memory data, for example scratch
 data. There is no inherent persistent storage of the data. The data source uri is constructed.
@@ -54,7 +54,7 @@ E.g. to create mesh with one quad and one triangle
       scratchLayer = QgsMeshLayer(uri, "My Scratch layer", "mesh_memory")
 
 MDAL data provider (mdal)
-~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Accesses data using the MDAL drivers (https://github.com/lutraconsulting/MDAL). The url
 is the MDAL connection string. QGIS must be built with MDAL support to allow this provider.
@@ -744,8 +744,9 @@ This operation will disconnect the mesh layer from the data provider and removes
 
 .. versionadded:: 3.22
 
-.. deprecated:: QGIS 3.28
-  use the version with :py:class:`QgsMeshEditingError` instead
+.. deprecated:: 3.28
+
+   Use the version with :py:class:`QgsMeshEditingError` instead.
 %End
 
     bool startFrameEditing( const QgsCoordinateTransform &transform, QgsMeshEditingError &error /Out/, bool fixErrors );

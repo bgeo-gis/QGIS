@@ -17,6 +17,7 @@ from qgis.core import (
     QgsStringUtils,
     QgsTextBlock,
     QgsTextFragment,
+    QgsTextBlockFormat,
     QgsTextCharacterFormat
 )
 
@@ -39,6 +40,14 @@ class TestQgsTextBlock(QgisTestCase):
         self.assertEqual(len(block), 1)
         self.assertEqual(block[0].text(), fragment.text())
         self.assertEqual(block.toPlainText(), 'ludicrous gibs!')
+
+    def test_format(self):
+        block = QgsTextBlock()
+        self.assertFalse(block.blockFormat().hasHorizontalAlignmentSet())
+        format = QgsTextBlockFormat()
+        format.setHasHorizontalAlignmentSet(True)
+        block.setBlockFormat(format)
+        self.assertTrue(block.blockFormat().hasHorizontalAlignmentSet())
 
     def testFromPlainText(self):
         block = QgsTextBlock.fromPlainText('abc def')
@@ -86,6 +95,43 @@ class TestQgsTextBlock(QgisTestCase):
         self.assertEqual(block[1].text(), 'b')
 
         self.assertEqual(block.toPlainText(), 'ab')
+
+    def testInsert(self):
+        block = QgsTextBlock()
+        self.assertEqual(len(block), 0)
+
+        frag = QgsTextFragment('a')
+        with self.assertRaises(IndexError):
+            block.insert(-1, frag)
+        with self.assertRaises(IndexError):
+            block.insert(1, frag)
+        self.assertEqual(len(block), 0)
+        block.insert(0, frag)
+        self.assertEqual(len(block), 1)
+        self.assertEqual(block[0].text(), 'a')
+        frag = QgsTextFragment('b')
+
+        block.insert(0, frag)
+        self.assertEqual(len(block), 2)
+        self.assertEqual(block[0].text(), 'b')
+        self.assertEqual(block[1].text(), 'a')
+
+        frag = QgsTextFragment('c')
+        block.insert(1, frag)
+        self.assertEqual(len(block), 3)
+        self.assertEqual(block[0].text(), 'b')
+        self.assertEqual(block[1].text(), 'c')
+        self.assertEqual(block[2].text(), 'a')
+
+        frag = QgsTextFragment('d')
+        with self.assertRaises(IndexError):
+            block.insert(4, frag)
+        block.insert(3, frag)
+        self.assertEqual(len(block), 4)
+        self.assertEqual(block[0].text(), 'b')
+        self.assertEqual(block[1].text(), 'c')
+        self.assertEqual(block[2].text(), 'a')
+        self.assertEqual(block[3].text(), 'd')
 
     def testAt(self):
         block = QgsTextBlock()

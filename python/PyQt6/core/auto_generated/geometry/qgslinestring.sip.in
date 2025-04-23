@@ -643,6 +643,17 @@ If ``useZValues`` is ``True`` then z values will also be considered when testing
 
 
 
+    QVector<QgsLineString *> splitToDisjointXYParts() const /Factory/;
+%Docstring
+Divides the linestring into parts that don't share any points or lines.
+
+This method throws away Z and M coordinates.
+
+The ownership of returned pointers is transferred to the caller.
+
+.. versionadded:: 3.40
+%End
+
     double length3D() const /HoldGIL/;
 %Docstring
 Returns the length in 3D world of the line string.
@@ -718,7 +729,7 @@ Please note that the sum will be negative if the points are defined in clockwise
 Therefore, if you want to use the sum as an area (as the method name indicates) then you probably should use the absolute value,
 since otherwise a bug can be introduced (such as the bug fixed for github issue 49578)
 
-.. seealso:: :py:func:`https`
+.. seealso:: https://en.wikipedia.org/wiki/Shoelace_formula#Triangle_formula
 %End
 
     virtual double vertexAngle( QgsVertexId vertex ) const;
@@ -852,7 +863,7 @@ Deprecated: use calculateBoundingBox3D instead
 
 .. versionadded:: 3.26
 
-.. deprecated:: QGIS 3.34
+.. deprecated:: 3.34
 %End
 
     virtual QgsBox3D calculateBoundingBox3D() const;

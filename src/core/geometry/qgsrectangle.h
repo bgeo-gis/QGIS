@@ -182,7 +182,7 @@ class CORE_EXPORT QgsRectangle
      * Set a rectangle so that min corner is at max
      * and max corner is at min. It is NOT normalized.
      *
-     * \deprecated since QGIS 3.34 - will be removed in QGIS 4.0. Use setNull().
+     * \deprecated QGIS 3.34. Will be removed in QGIS 4.0. Use setNull().
      */
     Q_DECL_DEPRECATED void setMinimal() SIP_DEPRECATED
     {
@@ -369,6 +369,11 @@ class CORE_EXPORT QgsRectangle
      */
     bool intersects( const QgsRectangle &rect ) const SIP_HOLDGIL
     {
+      if ( isNull() || rect.isNull() )
+      {
+        return false;
+      }
+
       const double x1 = ( mXmin > rect.mXmin ? mXmin : rect.mXmin );
       const double x2 = ( mXmax < rect.mXmax ? mXmax : rect.mXmax );
       if ( x1 > x2 )

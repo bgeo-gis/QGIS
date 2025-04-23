@@ -61,6 +61,11 @@ QString QgsTextBlock::toPlainText() const
   return res;
 }
 
+void QgsTextBlock::reserve( int count )
+{
+  mFragments.reserve( count );
+}
+
 void QgsTextBlock::append( const QgsTextFragment &fragment )
 {
   mFragments.append( fragment );
@@ -69,6 +74,16 @@ void QgsTextBlock::append( const QgsTextFragment &fragment )
 void QgsTextBlock::append( QgsTextFragment &&fragment )
 {
   mFragments.push_back( fragment );
+}
+
+void QgsTextBlock::insert( int index, const QgsTextFragment &fragment )
+{
+  mFragments.insert( index, fragment );
+}
+
+void QgsTextBlock::insert( int index, QgsTextFragment &&fragment )
+{
+  mFragments.insert( index, fragment );
 }
 
 void QgsTextBlock::clear()
@@ -84,6 +99,11 @@ bool QgsTextBlock::empty() const
 int QgsTextBlock::size() const
 {
   return mFragments.size();
+}
+
+void QgsTextBlock::setBlockFormat( const QgsTextBlockFormat &format )
+{
+  mBlockFormat = format;
 }
 
 void QgsTextBlock::applyCapitalization( Qgis::Capitalization capitalization )

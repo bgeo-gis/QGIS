@@ -145,7 +145,7 @@ class GUI_EXPORT QgsCodeEditor : public QsciScintilla
     enum class Flag : int SIP_ENUM_BASETYPE( IntFlag )
     {
       CodeFolding = 1 << 0, //!< Indicates that code folding should be enabled for the editor
-      ImmediatelyUpdateHistory = 1 << 1, //!< Indicates that the history file should be immediately updated whenever a command is executed, instead of the default behavior of only writing the history on widget close. Since QGIS 3.32.
+      ImmediatelyUpdateHistory = 1 << 1, //!< Indicates that the history file should be immediately updated whenever a command is executed, instead of the default behavior of only writing the history on widget close \since QGIS 3.32
     };
     Q_ENUM( Flag )
 
@@ -202,13 +202,13 @@ class GUI_EXPORT QgsCodeEditor : public QsciScintilla
     /**
      * Set margin visible state
      * \param margin Set margin in the editor
-     * \deprecated Use base class methods for individual margins instead, or setLineNumbersVisible()
+     * \deprecated QGIS 3.40. Use base class methods for individual margins instead, or setLineNumbersVisible().
      */
     Q_DECL_DEPRECATED void setMarginVisible( bool margin ) SIP_DEPRECATED;
 
     /**
      * Returns whether margins are in a visible state
-     * \deprecated Use base class methods for individual margins instead, or lineNumbersVisible()
+     * \deprecated QGIS 3.40. Use base class methods for individual margins instead, or lineNumbersVisible().
      */
     Q_DECL_DEPRECATED bool marginVisible() SIP_DEPRECATED { return mMargin; }
 
@@ -406,6 +406,18 @@ class GUI_EXPORT QgsCodeEditor : public QsciScintilla
      * \since QGIS 3.36
      */
     void setLinearSelection( int start, int end );
+
+    // Override QsciScintilla::callTip to handle wrapping
+    virtual void callTip() override;
+
+    /**
+     * Returns the linear position of the start of the last wrapped part for the specified line, or
+     * for the current line if line = -1
+     * If wrapping is disabled, returns -1 instead
+     *
+     * \since QGIS 3.40
+     */
+    int wrapPosition( int line = -1 );
 
   public slots:
 
@@ -633,6 +645,7 @@ class GUI_EXPORT QgsCodeEditor : public QsciScintilla
     bool readHistoryFile();
     void syncSoftHistory();
     void updateHistory( const QStringList &commands, bool skipSoftHistory = false );
+    char getCharacter( int &pos ) const;
 
     QString mWidgetTitle;
     bool mMargin = false;

@@ -90,16 +90,16 @@ class CORE_EXPORT QgsCallout
       DrawCalloutToAllParts, //!< Whether callout lines should be drawn to all feature parts
       AnchorPointPosition, //!< Feature's anchor point position
       LabelAnchorPointPosition, //!< Label's anchor point position
-      OriginX, //!< X-coordinate of callout origin (label anchor) (since QGIS 3.20)
-      OriginY, //!< Y-coordinate of callout origin (label anchor) (since QGIS 3.20)
-      DestinationX, //!< X-coordinate of callout destination (feature anchor) (since QGIS 3.20)
-      DestinationY, //!< Y-coordinate of callout destination (feature anchor) (since QGIS 3.20)
-      Curvature, //!< Curvature of curved line callouts (since QGIS 3.20)
-      Orientation, //!< Orientation of curved line callouts (since QGIS 3.20)
-      Margins, //!< Margin from text (since QGIS 3.20)
-      WedgeWidth, //!< Balloon callout wedge width (since QGIS 3.20)
-      CornerRadius, //!< Balloon callout corner radius (since QGIS 3.20)
-      BlendMode, //!< Callout blend mode (since QGIS 3.20)
+      OriginX, //!< X-coordinate of callout origin (label anchor) \since QGIS 3.20
+      OriginY, //!< Y-coordinate of callout origin (label anchor) \since QGIS 3.20
+      DestinationX, //!< X-coordinate of callout destination (feature anchor) \since QGIS 3.20
+      DestinationY, //!< Y-coordinate of callout destination (feature anchor) \since QGIS 3.20
+      Curvature, //!< Curvature of curved line callouts \since QGIS 3.20
+      Orientation, //!< Orientation of curved line callouts \since QGIS 3.20
+      Margins, //!< Margin from text \since QGIS 3.20
+      WedgeWidth, //!< Balloon callout wedge width \since QGIS 3.20
+      CornerRadius, //!< Balloon callout corner radius \since QGIS 3.20
+      BlendMode, //!< Callout blend mode \since QGIS 3.20
     };
     // *INDENT-ON*
 
@@ -461,7 +461,7 @@ class CORE_EXPORT QgsCallout
 
     /**
      * Returns the anchor point geometry for a label with the given bounding box and \a anchor point mode.
-     * \deprecated QGIS 3.20 use calloutLabelPoint() instead
+     * \deprecated QGIS 3.20. Use calloutLabelPoint() instead.
      */
     Q_DECL_DEPRECATED QgsGeometry labelAnchorGeometry( const QRectF &bodyBoundingBox, const double angle, LabelAnchorPoint anchor ) const SIP_DEPRECATED;
 
@@ -759,7 +759,7 @@ class CORE_EXPORT QgsManhattanLineCallout : public QgsSimpleLineCallout
      * serialized in the \a properties map (corresponding to the output from
      * QgsManhattanLineCallout::properties() ).
      */
-    static QgsCallout *create( const QVariantMap &properties = QVariantMap(), const QgsReadWriteContext &context = QgsReadWriteContext() ) SIP_FACTORY;
+    static QgsCallout *create( const QVariantMap &properties = QVariantMap(), const QgsReadWriteContext &context = QgsReadWriteContext() ) SIP_FACTORY; // cppcheck-suppress duplInheritedMember
 
     QString type() const override;
     QgsManhattanLineCallout *clone() const override;
@@ -807,7 +807,7 @@ class CORE_EXPORT QgsCurvedLineCallout : public QgsSimpleLineCallout
      * serialized in the \a properties map (corresponding to the output from
      * QgsCurvedLineCallout::properties() ).
      */
-    static QgsCallout *create( const QVariantMap &properties = QVariantMap(), const QgsReadWriteContext &context = QgsReadWriteContext() ) SIP_FACTORY;
+    static QgsCallout *create( const QVariantMap &properties = QVariantMap(), const QgsReadWriteContext &context = QgsReadWriteContext() ) SIP_FACTORY; // cppcheck-suppress duplInheritedMember
 
     QString type() const override;
     QgsCurvedLineCallout *clone() const override;

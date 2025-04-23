@@ -423,13 +423,15 @@ class CORE_EXPORT QgsSymbolLayerUtils
 
     /**
      * Checks if \a element contains an ExternalGraphic element with format "image/svg+xml"
-     * @return TRUE if the ExternalGraphic with format "image/svg+xml" is found .
+     *
+     * \returns TRUE if the ExternalGraphic with format "image/svg+xml" is found .
      */
     static bool hasExternalGraphic( QDomElement &element );
 
     /**
      * Checks if \a element contains an ExternalGraphic element, if the optional \a format is specified it will also be checked.
-     * @return TRUE if the ExternalGraphic element is found and the optionally specified format matches.
+     *
+     * \returns TRUE if the ExternalGraphic element is found and the optionally specified format matches.
      * \since QGIS 3.30
      */
     static bool hasExternalGraphicV2( QDomElement &element, const QString format = QString() );
@@ -446,7 +448,8 @@ class CORE_EXPORT QgsSymbolLayerUtils
 
     /**
      * Checks if \a element contains a graphic fill with a raster image of type PNG, JPEG or GIF.
-     * @return TRUE if element contains a graphic fill with a raster image.
+     *
+     * \returns TRUE if element contains a graphic fill with a raster image.
      * \since QGIS 3.30
      */
     static bool needRasterImageFill( QDomElement &element );
@@ -869,7 +872,7 @@ class CORE_EXPORT QgsSymbolLayerUtils
     /**
      * Converts a set of symbol layer id to a set of pointers to actual symbol layers carried by the feature renderer.
      * \since QGIS 3.12
-     * \deprecated since QGIS 3.30 because it was related to old QgsSymbolLayerReference system
+     * \deprecated QGIS 3.30. Because it was related to old QgsSymbolLayerReference system.
      */
     Q_DECL_DEPRECATED static QSet<const QgsSymbolLayer *> toSymbolLayerPointers( const QgsFeatureRenderer *renderer, const QSet<QgsSymbolLayerId> &symbolLayerIds );
 

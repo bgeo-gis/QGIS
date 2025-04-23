@@ -130,7 +130,7 @@ class GUI_EXPORT QgsEditorWidgetWrapper : public QgsWidgetWrapper
      * \param widget The widget which was created by a wrapper
      * \returns The wrapper for the widget or NULLPTR
      */
-    static QgsEditorWidgetWrapper *fromWidget( QWidget *widget );
+    static QgsEditorWidgetWrapper *fromWidget( QWidget *widget ); // cppcheck-suppress duplInheritedMember
 
     /**
      * Check if the given widget or one of its parent is a QTableView.
@@ -240,7 +240,7 @@ class GUI_EXPORT QgsEditorWidgetWrapper : public QgsWidgetWrapper
      * Emit this signal, whenever the value changed.
      *
      * \param value The new value
-     * \deprecated since QGIS 3.10 use valuesChanged signal instead
+     * \deprecated QGIS 3.10. Use valuesChanged signal instead.
      */
     Q_DECL_DEPRECATED void valueChanged( const QVariant &value );
 
@@ -287,7 +287,7 @@ class GUI_EXPORT QgsEditorWidgetWrapper : public QgsWidgetWrapper
      * to reflect the new value.
      *
      * \param value The new value of the attribute
-     * \deprecated since QGIS 3.10
+     * \deprecated QGIS 3.10
      */
     virtual void setValue( const QVariant &value ) SIP_DEPRECATED;
 
